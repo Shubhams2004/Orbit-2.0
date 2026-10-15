@@ -19,7 +19,7 @@ This guide details how Orbit 2.0 is deployed as a unified Cloudflare Worker serv
 | Requirement | Value / Recommendation | Notes |
 |---|---|---|
 | **Node.js** | `>= 20.0.0` (LTS 20 or 22 recommended) | Required for Vite and Wrangler |
-| **Package Manager** | `npm` (or `pnpm` / `yarn`) | Uses `package-lock.json` |
+| **Package Manager** | `npm` | Standardized on `package-lock.json` (`npm ci` on Cloudflare Builds) |
 | **Cloudflare Account** | Free or Paid Workers plan | Includes Cloudflare D1 and Workers Static Assets |
 | **Wrangler CLI** | `^4.151.0` (installed locally in `devDependencies`) | Run via `npx wrangler` or npm scripts |
 
