@@ -1,0 +1,53 @@
+{
+  "name": "react-example",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx server.ts",
+    "start": "node server.ts",
+    "dev:worker": "wrangler dev worker/index.ts --port 8787",
+    "build": "vite build",
+    "preview": "vite preview",
+    "clean": "rm -rf dist server.js",
+    "lint": "tsc --noEmit",
+    "lint:worker": "tsc -p tsconfig.worker.json --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "db:create": "wrangler d1 create orbit_d1_db",
+    "db:create:staging": "wrangler d1 create orbit_d1_db_staging",
+    "db:migrate:local": "wrangler d1 migrations apply orbit_d1_db --local --yes",
+    "db:migrate:remote": "wrangler d1 migrations apply orbit_d1_db --remote",
+    "db:migrate:staging": "wrangler d1 migrations apply orbit_d1_db_staging --remote --env staging",
+    "db:list:remote": "wrangler d1 migrations list orbit_d1_db --remote",
+    "cf-typegen": "wrangler types worker/types/worker-env.d.ts",
+    "test:backend": "tsx scripts/test-backend.ts",
+    "validate:deploy": "tsx scripts/validate-deployment.ts"
+  },
+  "dependencies": {
+    "@google/genai": "^2.4.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-react": "^6.1.1",
+    "lucide-react": "^0.546.0",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "vite": "^8.3.0",
+    "express": "^4.21.2",
+    "dotenv": "^17.2.3",
+    "motion": "^12.23.24"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261014.1",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "autoprefixer": "^10.4.21",
+    "esbuild": "^0.25.0",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.21.0",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.151.0"
+  }
+}

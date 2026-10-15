@@ -1,0 +1,6 @@
+{
+  "name": "Orbit 2.0",
+  "description": "Professional AI-powered personal assistant and task automation workspace.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
