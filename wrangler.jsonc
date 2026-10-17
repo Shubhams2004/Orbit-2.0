@@ -10,31 +10,16 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": true
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "orbit-db",
+      "database_id": "420df9b9-9036-4373-a92f-575602d986fa",
+      "migrations_dir": "migrations"
+    }
+  ],
   "vars": {
     "ENVIRONMENT": "production",
     "API_VERSION": "v1"
   }
-  // D1 DATABASE CONFIGURATION:
-  // Cloudflare API rejects deployment with error code 10021 if `database_id` contains a placeholder.
-  // To attach your D1 database, choose ONE of the following options:
-  //
-  // Option A (Zero-config via Cloudflare Dashboard):
-  //   1. Go to Cloudflare Dashboard -> Storage & Databases -> D1 -> Create database ("orbit_d1_db").
-  //   2. Go to Workers & Pages -> orbit-2-0 -> Settings -> Bindings -> Add -> D1 Database.
-  //   3. Set Variable Name: "DB", select database "orbit_d1_db", and Save.
-  //
-  // Option B (via wrangler.jsonc):
-  //   1. Run `npx wrangler d1 create orbit_d1_db` locally.
-  //   2. Copy the actual database UUID from the output.
-  //   3. Uncomment the `d1_databases` block below and replace <YOUR_D1_DATABASE_ID> with that UUID.
-  //
-  // ,
-  // "d1_databases": [
-  //   {
-  //     "binding": "DB",
-  //     "database_name": "orbit_d1_db",
-  //     "database_id": "<YOUR_D1_DATABASE_ID>",
-  //     "migrations_dir": "migrations"
-  //   }
-  // ]
 }
