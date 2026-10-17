@@ -56,7 +56,12 @@ if (!fs.existsSync(wranglerPath)) {
     const d1List = config.d1_databases || [];
     const mainDb = d1List.find((db: { binding: string }) => db.binding === 'DB');
     if (!mainDb) {
-      record('Database', 'D1 Binding "DB"', 'FAIL', 'No d1_databases entry with binding "DB" found.');
+      record(
+        'Database',
+        'D1 Binding "DB"',
+        'WARN',
+        'd1_databases entry is not currently active in wrangler.jsonc. Bind "DB" via Cloudflare Dashboard (Settings > Bindings > D1) or uncomment in wrangler.jsonc after running "npm run db:create".'
+      );
     } else {
       record('Database', 'D1 Binding "DB"', 'PASS', `Found D1 binding '${mainDb.binding}' (${mainDb.database_name})`);
       if (mainDb.database_id.includes('<YOUR_') || mainDb.database_id === '00000000-0000-0000-0000-000000000000') {

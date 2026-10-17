@@ -75,6 +75,15 @@ export default {
       // Identity is derived exclusively from verified credentials, never user-supplied parameters
       const user = await authenticateRequest(request, env);
 
+      // 5. Database Binding Check
+      if (!env.DB) {
+        return errorResponse(
+          'DATABASE_UNAVAILABLE',
+          'Cloudflare D1 database binding "DB" is not yet attached to this Worker. Please create your D1 database and bind it via Cloudflare Dashboard (Settings > Bindings > D1) or in wrangler.jsonc.',
+          503
+        );
+      }
+
       // --- Tasks Endpoints ---
       // GET /api/v1/tasks
       // POST /api/v1/tasks

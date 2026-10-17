@@ -39,12 +39,20 @@ This guide details how Orbit 2.0 is deployed as a unified Cloudflare Worker serv
 5. Isolated local development server (`server.ts`) connecting local SQLite and Vite middlewares
 6. Deployment readiness validation script (`npm run validate:deploy`)
 
-### 📋 Remaining Manual Steps (One-Time Setup)
-1. Authenticate Wrangler with your Cloudflare account (`npx wrangler login`).
-2. Create the production D1 database in Cloudflare (`npm run db:create`).
-3. Paste the generated D1 database ID into `wrangler.jsonc` replacing `<YOUR_D1_DATABASE_ID>`.
-4. Apply migrations to the remote database (`npm run db:migrate:remote`).
-5. Connect your GitHub repository to Cloudflare Workers Builds (or run `npm run deploy`).
+### 📋 Remaining Manual Steps (To attach live D1 Database)
+You can attach your D1 database via either option:
+
+**Option A (Recommended — Direct via Cloudflare Dashboard):**
+1. In Cloudflare Dashboard, go to **Storage & Databases** → **D1** → **Create database** (name: `orbit_d1_db`).
+2. Go to **Workers & Pages** → **orbit-2-0** → **Settings** → **Bindings** → **Add** → **D1 Database**.
+3. Set **Variable Name**: `DB`, select database **`orbit_d1_db`**, and click **Save and Deploy**.
+4. Apply migrations: `npm run db:migrate:remote`.
+
+**Option B (via `wrangler.jsonc`):**
+1. Run `npm run db:create` (or `npx wrangler d1 create orbit_d1_db`).
+2. Copy the returned UUID and replace `<YOUR_D1_DATABASE_ID>` in `wrangler.jsonc`.
+3. Uncomment the `d1_databases` block in `wrangler.jsonc`.
+4. Run `npm run db:migrate:remote` and push to GitHub.
 
 ---
 
@@ -118,9 +126,9 @@ npm run deploy
 Wrangler will upload `./dist` static assets, bundle `worker/index.ts`, bind the `DB` database and `ASSETS`, and provide your live application URL:
 ```text
 Total Upload: xx.xx KiB / gzip: xx.xx KiB
-Uploaded orbit-app (x.xx sec)
-Deployed orbit-app triggers:
-  https://orbit-app.<your-subdomain>.workers.dev
+Uploaded orbit-2-0 (x.xx sec)
+Deployed orbit-2-0 triggers:
+  https://orbit-2-0.<your-subdomain>.workers.dev
 ```
 
 ---
@@ -146,7 +154,6 @@ Cloudflare Workers natively supports **Workers Builds** connected directly to yo
 ### Automatic Push Workflow
 - Every `git push` to `main` automatically triggers Cloudflare Workers Builds.
 - Cloudflare pulls the commit, runs `npm run build` (compiling the React app into `./dist`), and deploys the unified Worker.
-- Staging previews can be configured for pull requests using the `--env staging` configuration in `wrangler.jsonc`.
 
 ---
 
@@ -164,11 +171,11 @@ Once deployed, verify your service endpoints:
 
 ```bash
 # 1. Health check endpoint (returns JSON status, version, and DB binding state)
-curl https://orbit-app.<your-subdomain>.workers.dev/api/v1/health
+curl https://orbit-2-0.<your-subdomain>.workers.dev/api/v1/health
 
 # 2. Frontend route (returns SPA index.html)
-curl -I https://orbit-app.<your-subdomain>.workers.dev/tasks
+curl -I https://orbit-2-0.<your-subdomain>.workers.dev/tasks
 
 # 3. Unknown API route (returns JSON 404, NOT html)
-curl https://orbit-app.<your-subdomain>.workers.dev/api/v1/unknown
+curl https://orbit-2-0.<your-subdomain>.workers.dev/api/v1/unknown
 ```
