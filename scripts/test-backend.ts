@@ -650,6 +650,214 @@ async function runTests() {
     'Task userId derived strictly from Bob verified sub claim ("fb_usr_bob_202"), not request body injection'
   );
 
+  // 9. Test Cloudflare Workers AI Protected Endpoint (/api/v1/ai/chat)
+  console.log('\n9. Testing Cloudflare Workers AI Protected Endpoint (/api/v1/ai/chat):');
+  
+  // Test 9.1: Unauthorized request (no token) returns 401
+  const unauthAiRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: 'Hello AI' }),
+    }),
+    firebaseProdEnv
+  );
+  const unauthAiJson: any = await unauthAiRes.json();
+  assert(unauthAiRes.status === 401, 'POST /api/v1/ai/chat without token returns 401 Unauthorized');
+  assert(unauthAiJson.error?.code === 'UNAUTHORIZED', 'Error code is UNAUTHORIZED');
+
+  // Test 9.2: Missing AI binding returns 503 AI_UNAVAILABLE
+  const noAiRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt: 'Hello without AI binding' }),
+    }),
+    firebaseProdEnv // lacks env.AI
+  );
+  const noAiJson: any = await noAiRes.json();
+  assert(noAiRes.status === 503, 'POST /api/v1/ai/chat without AI binding returns 503 Service Unavailable');
+  assert(noAiJson.error?.code === 'AI_UNAVAILABLE', 'Error code is AI_UNAVAILABLE');
+
+  // Setup Mock Workers AI Binding
+  let mockAiShouldFail = false;
+  const mockAi: any = {
+    async run(model: string, input: any) {
+      if (mockAiShouldFail) {
+        throw new Error('Cloudflare Workers AI inference engine rate limited');
+      }
+      const lastMsg = input.messages[input.messages.length - 1];
+      return {
+        response: `[${model}] Processed request: "${lastMsg.content.slice(0, 40)}"`,
+      };
+    },
+  };
+
+  const aiProdEnv: Env = {
+    ...firebaseProdEnv,
+    AI: mockAi,
+  };
+
+  // Re-register test public key for valid token verification
+  registerTestPublicKey(testKid, firebaseKeyPair.publicKey);
+
+  // Test 9.3: Empty prompt rejects with 400 VALIDATION_ERROR
+  const emptyPromptRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt: '    ' }),
+    }),
+    aiProdEnv
+  );
+  const emptyPromptJson: any = await emptyPromptRes.json();
+  assert(emptyPromptRes.status === 400, 'Empty prompt rejected with 400 Bad Request');
+  assert(emptyPromptJson.error?.code === 'VALIDATION_ERROR', 'Error code is VALIDATION_ERROR');
+
+  // Test 9.4: Oversized prompt (>4000 characters) rejects with 400 VALIDATION_ERROR
+  const oversizedPrompt = 'A'.repeat(4001);
+  const oversizedRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt: oversizedPrompt }),
+    }),
+    aiProdEnv
+  );
+  const oversizedJson: any = await oversizedRes.json();
+  assert(oversizedRes.status === 400, 'Oversized prompt (>4000 chars) rejected with 400');
+  assert(oversizedJson.error?.code === 'VALIDATION_ERROR', 'Error code is VALIDATION_ERROR');
+
+  // Test 9.5: Auto-creates conversation when none provided, persists both user and assistant messages
+  const autoConvRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt: 'Create weekly sprint deliverable summary' }),
+    }),
+    aiProdEnv
+  );
+  const autoConvJson: any = await autoConvRes.json();
+  assert(autoConvRes.status === 200, 'POST /api/v1/ai/chat succeeds with 200 OK');
+  assert(Boolean(autoConvJson.data?.conversationId), 'Conversation ID was created and returned');
+  assert(autoConvJson.data?.model === '@cf/meta/llama-3.1-8b-instruct', 'Model is @cf/meta/llama-3.1-8b-instruct');
+  assert(Boolean(autoConvJson.data?.response), 'Assistant response text generated');
+
+  const createdConvId = autoConvJson.data.conversationId;
+
+  // Verify D1 records
+  const convInDb = await d1.prepare('SELECT * FROM conversations WHERE id = ? AND user_id = ?')
+    .bind(createdConvId, 'fb_usr_alice_101')
+    .first();
+  assert(Boolean(convInDb), 'Conversation record safely persisted in D1 with Alice UID');
+
+  const msgsInDb = await d1.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC')
+    .bind(createdConvId)
+    .all();
+  assert(msgsInDb.results.length === 2, 'Exactly 2 messages (user + assistant) persisted in D1');
+  assert(msgsInDb.results[0].role === 'user', 'First message has role "user"');
+  assert(msgsInDb.results[1].role === 'assistant', 'Second message has role "assistant"');
+
+  // Test 9.6: Appends to existing conversation when valid conversationId provided
+  const followUpRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: 'Prioritize task 1 first please',
+        conversationId: createdConvId,
+      }),
+    }),
+    aiProdEnv
+  );
+  const followUpJson: any = await followUpRes.json();
+  assert(followUpRes.status === 200, 'Follow-up message succeeds with 200 OK');
+  assert(followUpJson.data?.conversationId === createdConvId, 'Appended to the same conversationId');
+
+  const updatedMsgsInDb = await d1.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC')
+    .bind(createdConvId)
+    .all();
+  assert(updatedMsgsInDb.results.length === 4, 'Conversation now contains 4 messages in D1');
+
+  // Test 9.7: Cross-user isolation - User B cannot chat in User A's conversation
+  const crossUserChatRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${bobToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: 'Attempting to inject into Alice conversation',
+        conversationId: createdConvId,
+      }),
+    }),
+    aiProdEnv
+  );
+  const crossUserChatJson: any = await crossUserChatRes.json();
+  assert(crossUserChatRes.status === 404, 'Bob cannot post to Alice conversation (404 Not Found)');
+  assert(crossUserChatJson.error?.code === 'NOT_FOUND', 'Error code is NOT_FOUND');
+
+  // Test 9.8: Identity derivation is immune to request body injection
+  const bodyInjectAiRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${bobToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: 'Bob message with fake user_id in body',
+        user_id: 'fb_usr_alice_101',
+        userId: 'fb_usr_alice_101',
+      }),
+    }),
+    aiProdEnv
+  );
+  const bodyInjectAiJson: any = await bodyInjectAiRes.json();
+  assert(bodyInjectAiRes.status === 200, 'Bob chat request succeeds');
+  const bobConvId = bodyInjectAiJson.data.conversationId;
+  const bobConvCheck = await d1.prepare('SELECT user_id FROM conversations WHERE id = ?')
+    .bind(bobConvId)
+    .first();
+  assert(
+    bobConvCheck?.user_id === 'fb_usr_bob_202',
+    'Conversation owner strictly derived from verified token ("fb_usr_bob_202"), ignoring injected body'
+  );
+
+  // Test 9.9: Model execution failure returns 502 AI_GENERATION_FAILED
+  mockAiShouldFail = true;
+  const failureAiRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt: 'This should trigger an AI failure' }),
+    }),
+    aiProdEnv
+  );
+  const failureAiJson: any = await failureAiRes.json();
+  assert(failureAiRes.status === 502, 'AI model execution failure returns 502 Bad Gateway');
+  assert(failureAiJson.error?.code === 'AI_GENERATION_FAILED', 'Error code is AI_GENERATION_FAILED');
+  mockAiShouldFail = false;
+
   clearKeyCaches();
 
   console.log(`\n========================================`);

@@ -52,6 +52,13 @@ if (!fs.existsSync(wranglerPath)) {
       record('Configuration', 'SPA Fallback Routing', 'WARN', 'Consider setting not_found_handling: "single-page-application"');
     }
 
+    // Verify Workers AI binding
+    if (config.ai && config.ai.binding === 'AI') {
+      record('Configuration', 'Workers AI Binding', 'PASS', 'ai configured with binding "AI"');
+    } else {
+      record('Configuration', 'Workers AI Binding', 'WARN', 'Workers AI binding "AI" is not declared in wrangler.jsonc');
+    }
+
     // Verify D1 binding
     const d1List = config.d1_databases || [];
     const mainDb = d1List.find((db: { binding: string }) => db.binding === 'DB');

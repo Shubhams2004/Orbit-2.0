@@ -1,5 +1,6 @@
 import { ChatMessage, ChatAttachment, AgentAction, Task, Project } from '../types';
 import { agentService } from './agentService';
+import { apiClient } from './apiClient';
 
 export interface SendMessageOptions {
   conversationId: string;
@@ -231,27 +232,56 @@ export class MockChatService implements IChatService {
     messages.push(userMsg);
     this.saveMessages(conversationId, messages);
 
-    // 2. Synthesize AI Response Content & Agent Actions
-    const { fullText, proposedActions } = await this.synthesizeResponse(
-      content,
-      modelId,
-      attachments,
-      tasksContext,
-      projectsContext
-    );
+    // 2. Obtain AI Response (Live Cloudflare Workers AI with graceful local fallback)
+    let fullText = '';
+    let assistantMsgId = `msg_a_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    let activeModelName = modelId;
+    let proposedActions: AgentAction[] | undefined;
+    let isSimulated = false;
 
-    // 3. Simulate Streaming with Chunks
-    const assistantMsgId = `msg_a_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    try {
+      const aiResult = await apiClient.post<{
+        response: string;
+        conversationId: string;
+        messageId: string;
+        model: string;
+      }>('/api/v1/ai/chat', {
+        prompt: content,
+        conversationId,
+      });
+
+      if (aiResult && aiResult.response) {
+        fullText = aiResult.response;
+        assistantMsgId = aiResult.messageId || assistantMsgId;
+        activeModelName = aiResult.model || modelId;
+      } else {
+        throw new Error('Empty AI response');
+      }
+    } catch {
+      // Local fallback in development when Workers AI binding is unavailable
+      const synthesized = await this.synthesizeResponse(
+        content,
+        modelId,
+        attachments,
+        tasksContext,
+        projectsContext
+      );
+      fullText = synthesized.fullText;
+      proposedActions = synthesized.proposedActions;
+      isSimulated = true;
+    }
+
+    // 3. Simulate Streaming with Chunks for Responsive UI
     const assistantMsg: ChatMessage = {
       id: assistantMsgId,
       conversationId,
       role: 'assistant',
       content: '',
       timestamp: new Date().toISOString(),
-      modelUsed: modelId,
+      modelUsed: activeModelName,
       actions: proposedActions,
       status: 'streaming',
-      isSimulated: true,
+      isSimulated,
     };
 
     messages.push(assistantMsg);
