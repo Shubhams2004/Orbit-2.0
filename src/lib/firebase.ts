@@ -7,7 +7,7 @@
  * - Dynamic ID token retrieval for Cloudflare Worker API authorization
  */
 
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, deleteApp, FirebaseApp } from 'firebase/app';
 import {
   getAuth,
   signInWithEmailAndPassword,
@@ -20,21 +20,96 @@ import {
   Auth,
 } from 'firebase/auth';
 
-export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDummyKeyForDevelopment12345',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'orbit-2-auth.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'orbit-2-auth',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'orbit-2-auth.appspot.com',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '123456789012',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:123456789012:web:abcdef1234567890',
+const getInitialConfig = () => {
+  let storedKey = '';
+  try {
+    storedKey = localStorage.getItem('orbit_custom_firebase_api_key') || '';
+  } catch {}
+
+  const envApiKey =
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_API_KEY) ||
+    (typeof process !== 'undefined' && process.env?.VITE_FIREBASE_API_KEY) ||
+    '';
+
+  const isEnvKeyValid = Boolean(
+    envApiKey &&
+    !envApiKey.toLowerCase().includes('dummy') &&
+    envApiKey !== 'AIzaSyDummyKeyForDevelopment12345'
+  );
+
+  const apiKey =
+    (isEnvKeyValid ? envApiKey : storedKey.trim()) ||
+    envApiKey ||
+    'AIzaSyDummyKeyForDevelopment12345';
+
+  return {
+    apiKey,
+    authDomain:
+      (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN) ||
+      (typeof process !== 'undefined' && process.env?.VITE_FIREBASE_AUTH_DOMAIN) ||
+      'orbit-2-auth.firebaseapp.com',
+    projectId:
+      (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_PROJECT_ID) ||
+      (typeof process !== 'undefined' && process.env?.VITE_FIREBASE_PROJECT_ID) ||
+      'orbit-2-auth',
+    storageBucket:
+      (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET) ||
+      (typeof process !== 'undefined' && process.env?.VITE_FIREBASE_STORAGE_BUCKET) ||
+      'orbit-2-auth.firebasestorage.app',
+    messagingSenderId:
+      (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID) ||
+      (typeof process !== 'undefined' && process.env?.VITE_FIREBASE_MESSAGING_SENDER_ID) ||
+      '39026315168',
+    appId:
+      (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_APP_ID) ||
+      (typeof process !== 'undefined' && process.env?.VITE_FIREBASE_APP_ID) ||
+      '1:39026315168:web:2741e68857b994821f1ec5',
+  };
 };
 
+export const firebaseConfig = getInitialConfig();
+
+/**
+ * Checks whether a legitimate (non-dummy) Firebase API key is loaded
+ */
+export function isFirebaseConfigured(): boolean {
+  const key = firebaseConfig.apiKey;
+  return Boolean(
+    key &&
+    key !== 'AIzaSyDummyKeyForDevelopment12345' &&
+    key.length > 20 &&
+    !key.toLowerCase().includes('dummy')
+  );
+}
+
 // Singleton Firebase App initialization
-export const app: FirebaseApp =
+export let app: FirebaseApp =
   getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 // Firebase Auth Instance
-export const auth: Auth = getAuth(app);
+export let auth: Auth = getAuth(app);
+
+/**
+ * Saves a custom Firebase API key at runtime and reinitializes the Firebase client
+ */
+export async function saveCustomFirebaseApiKey(apiKey: string): Promise<boolean> {
+  const trimmed = apiKey.trim();
+  if (!trimmed) return false;
+
+  try {
+    localStorage.setItem('orbit_custom_firebase_api_key', trimmed);
+    firebaseConfig.apiKey = trimmed;
+
+    if (getApps().length > 0) {
+      await deleteApp(app);
+    }
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Sign in existing user with email and password
@@ -43,6 +118,12 @@ export async function loginWithEmail(
   email: string,
   password: string
 ): Promise<FirebaseUser> {
+  if (!isFirebaseConfigured()) {
+    throw {
+      code: 'auth/api-key-not-valid',
+      message: 'Firebase API key is not configured for project "orbit-2-auth". Please set VITE_FIREBASE_API_KEY in Cloudflare build variables or project settings.',
+    };
+  }
   const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
   return credential.user;
 }
@@ -55,6 +136,12 @@ export async function registerWithEmail(
   password: string,
   displayName?: string
 ): Promise<FirebaseUser> {
+  if (!isFirebaseConfigured()) {
+    throw {
+      code: 'auth/api-key-not-valid',
+      message: 'Firebase API key is not configured for project "orbit-2-auth". Please set VITE_FIREBASE_API_KEY in Cloudflare build variables or project settings.',
+    };
+  }
   const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
   if (displayName && displayName.trim()) {
     try {
@@ -94,6 +181,8 @@ export function formatFirebaseAuthError(error: unknown): string {
 
   const err = error as { code?: string; message?: string };
   switch (err.code) {
+    case 'auth/api-key-not-valid':
+      return 'Firebase API key is invalid or not yet configured for project "orbit-2-auth". Please set VITE_FIREBASE_API_KEY in your Cloudflare build variables or project settings.';
     case 'auth/invalid-credential':
     case 'auth/wrong-password':
     case 'auth/user-not-found':

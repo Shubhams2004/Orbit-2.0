@@ -3,9 +3,11 @@ import {
   loginWithEmail,
   registerWithEmail,
   formatFirebaseAuthError,
+  isFirebaseConfigured,
+  saveCustomFirebaseApiKey,
 } from '../../lib/firebase';
 import { useWorkspace } from '../../context/WorkspaceContext';
-import { Lock, Mail, User, X, Loader2, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, User, X, Loader2, ArrowRight, ShieldCheck, Key, AlertTriangle } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -25,6 +27,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [customApiKey, setCustomApiKey] = useState('');
+  const [showKeyInput, setShowKeyInput] = useState(false);
 
   if (!isOpen) return null;
 
@@ -130,6 +134,55 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             Create Account
           </button>
         </div>
+
+        {/* API Key Configuration Banner */}
+        {!isFirebaseConfigured() && (
+          <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-300">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 font-medium">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Firebase API Key Required</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowKeyInput(!showKeyInput)}
+                className="text-[11px] underline text-amber-200 hover:text-white"
+              >
+                {showKeyInput ? 'Close' : 'Set Key'}
+              </button>
+            </div>
+            <p className="mt-1 text-[11px] text-amber-300/80 leading-relaxed">
+              Project <code className="font-mono bg-neutral-900/60 px-1 py-0.5 rounded">orbit-2-auth</code> Web API key is not bundled in this build. Configure <code className="font-mono bg-neutral-900/60 px-1 py-0.5 rounded">VITE_FIREBASE_API_KEY</code> in Cloudflare or paste below.
+            </p>
+            {showKeyInput && (
+              <div className="mt-2.5 flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Key className="w-3.5 h-3.5 text-neutral-500 absolute left-2.5 top-2" />
+                  <input
+                    type="password"
+                    value={customApiKey}
+                    onChange={(e) => setCustomApiKey(e.target.value)}
+                    placeholder="AIzaSy..."
+                    className="w-full pl-8 pr-2.5 py-1.5 bg-neutral-950 border border-neutral-700 rounded text-neutral-100 placeholder-neutral-500 text-xs focus:outline-hidden focus:border-amber-400"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (customApiKey.trim()) {
+                      await saveCustomFirebaseApiKey(customApiKey.trim());
+                      setError(null);
+                      setShowKeyInput(false);
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded font-medium text-xs transition-colors cursor-pointer"
+                >
+                  Save Key
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Error message */}
         {error && (
