@@ -3,6 +3,21 @@ import fs from 'node:fs';
 import path from 'node:path';
 import worker from '../worker/index';
 import { Env } from '../worker/types';
+import { signHs256Jwt, base64UrlEncode } from '../worker/utils/jwt';
+import { registerTestPublicKey, clearKeyCaches } from '../worker/utils/firebase-auth';
+
+async function signRs256Jwt(
+  header: Record<string, unknown>,
+  payload: Record<string, unknown>,
+  privateKey: CryptoKey
+): Promise<string> {
+  const headerB64 = base64UrlEncode(JSON.stringify(header));
+  const payloadB64 = base64UrlEncode(JSON.stringify(payload));
+  const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
+  const sigBuffer = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', privateKey, data);
+  const sigB64 = base64UrlEncode(new Uint8Array(sigBuffer));
+  return `${headerB64}.${payloadB64}.${sigB64}`;
+}
 
 // D1 Database implementation wrapping Node.js built-in SQLite
 function createTestD1(db: DatabaseSync): any {
@@ -265,7 +280,377 @@ async function runTests() {
     }),
     env
   );
-  assert(user2ConvCheck.status === 404, 'User 2 cannot read messages in User 1 conversation (404 Not Found)');
+  assert(user2ConvCheck.status === 404, 'User 2 cannot read messages in User 1 conversation (404 Not Found)\n');
+
+  // 7. JWT Authentication & Security Test Suite
+  console.log('7. Testing HS256 JWT Verification & Impersonation Prevention:');
+  const testSecret = 'test_super_secret_signing_key_32_bytes_long!!';
+  const prodEnv: Env = {
+    DB: d1,
+    ENVIRONMENT: 'production',
+    JWT_SECRET: testSecret,
+    JWT_ISSUER: 'orbit-auth-service',
+    JWT_AUDIENCE: 'orbit-api',
+  };
+
+  // Test 7.1: Valid HS256 signed token succeeds in production
+  const validToken = await signHs256Jwt(
+    { sub: 'usr_secure_99', name: 'Verified User', email: 'verified@orbit.io' },
+    testSecret,
+    { expiresInSeconds: 3600, issuer: 'orbit-auth-service', audience: 'orbit-api' }
+  );
+
+  const validJwtRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      headers: { Authorization: `Bearer ${validToken}` },
+    }),
+    prodEnv
+  );
+  assert(validJwtRes.status === 200, 'Valid HS256 signed JWT succeeds in production (200 OK)');
+
+  // Test 7.2: Invalid signature rejection
+  const tamperedSigToken = validToken.slice(0, -3) + 'XYZ';
+  const invalidSigRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      headers: { Authorization: `Bearer ${tamperedSigToken}` },
+    }),
+    prodEnv
+  );
+  const invalidSigJson: any = await invalidSigRes.json();
+  assert(invalidSigRes.status === 401, 'Tampered JWT signature rejected with 401 Unauthorized');
+  assert(invalidSigJson.error?.code === 'INVALID_SIGNATURE', 'Error code is INVALID_SIGNATURE');
+
+  // Test 7.3: Expired token rejection
+  const expiredToken = await signHs256Jwt(
+    { sub: 'usr_secure_99', exp: Math.floor(Date.now() / 1000) - 300 },
+    testSecret,
+    { issuer: 'orbit-auth-service', audience: 'orbit-api' }
+  );
+  const expiredRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      headers: { Authorization: `Bearer ${expiredToken}` },
+    }),
+    prodEnv
+  );
+  const expiredJson: any = await expiredRes.json();
+  assert(expiredRes.status === 401, 'Expired JWT rejected with 401 Unauthorized');
+  assert(expiredJson.error?.code === 'TOKEN_EXPIRED', 'Error code is TOKEN_EXPIRED');
+
+  // Test 7.4: Malformed tokens
+  const malformedRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      headers: { Authorization: 'Bearer not_a_real_jwt_token' },
+    }),
+    prodEnv
+  );
+  const malformedJson: any = await malformedRes.json();
+  assert(malformedRes.status === 401, 'Malformed token rejected with 401');
+  assert(malformedJson.error?.code === 'MALFORMED_TOKEN', 'Malformed token code is MALFORMED_TOKEN');
+
+  const twoPartRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      headers: { Authorization: 'Bearer partOne.partTwo' },
+    }),
+    prodEnv
+  );
+  assert(twoPartRes.status === 401, 'Two-part token rejected with 401 MALFORMED_TOKEN');
+
+  // Test 7.5: Attempted user impersonation (dev token in production)
+  const devInProdRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      headers: { Authorization: 'Bearer dev_usr_admin_impersonator' },
+    }),
+    prodEnv
+  );
+  const devInProdJson: any = await devInProdRes.json();
+  assert(devInProdRes.status === 401, 'Development token rejected in production environment (401)');
+  assert(
+    devInProdJson.error?.code === 'DEVELOPMENT_TOKEN_REJECTED',
+    'Error code is DEVELOPMENT_TOKEN_REJECTED'
+  );
+
+  // Test 7.6: Attempted user impersonation (payload tampering with original signature)
+  const parts = validToken.split('.');
+  const forgedPayload = {
+    sub: 'usr_admin_victim',
+    name: 'Admin Victim',
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    iss: 'orbit-auth-service',
+    aud: 'orbit-api',
+  };
+  const forgedPayloadB64 = base64UrlEncode(JSON.stringify(forgedPayload));
+  const forgedToken = `${parts[0]}.${forgedPayloadB64}.${parts[2]}`; // Reusing original signature!
+
+  const forgedRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      headers: { Authorization: `Bearer ${forgedToken}` },
+    }),
+    prodEnv
+  );
+  const forgedJson: any = await forgedRes.json();
+  assert(forgedRes.status === 401, 'Forged payload with reused signature rejected (401)');
+  assert(forgedJson.error?.code === 'INVALID_SIGNATURE', 'Forged payload fails with INVALID_SIGNATURE');
+
+  // Test 7.7: Attempted user impersonation (token signed with wrong/rogue secret)
+  const rogueToken = await signHs256Jwt(
+    { sub: 'usr_admin_victim' },
+    'attacker_rogue_secret_key_1234567890!',
+    { expiresInSeconds: 3600, issuer: 'orbit-auth-service', audience: 'orbit-api' }
+  );
+  const rogueRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      headers: { Authorization: `Bearer ${rogueToken}` },
+    }),
+    prodEnv
+  );
+  assert(rogueRes.status === 401, 'Token signed with rogue secret rejected (401 INVALID_SIGNATURE)');
+
+  // Test 7.8: Identity derivation is immune to request body parameter injection
+  const bodyImpersonationRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: 'Task Attempting Identity Hijack',
+        user_id: 'usr_completely_different_admin',
+        userId: 'usr_completely_different_admin',
+      }),
+    }),
+    prodEnv
+  );
+  const bodyImpersonationJson: any = await bodyImpersonationRes.json();
+  assert(bodyImpersonationRes.status === 201, 'Task created successfully');
+  assert(
+    bodyImpersonationJson.data.userId === 'usr_secure_99',
+    'Task userId derived strictly from verified JWT sub ("usr_secure_99"), not request body'
+  );
+
+  // Test 7.9: Issuer policy enforcement
+  const wrongIssuerToken = await signHs256Jwt(
+    { sub: 'usr_secure_99' },
+    testSecret,
+    { expiresInSeconds: 3600, issuer: 'rogue-issuer-id', audience: 'orbit-api' }
+  );
+  const wrongIssuerRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      headers: { Authorization: `Bearer ${wrongIssuerToken}` },
+    }),
+    prodEnv
+  );
+  const wrongIssuerJson: any = await wrongIssuerRes.json();
+  assert(wrongIssuerRes.status === 401, 'Token with untrusted issuer rejected (401)');
+  assert(wrongIssuerJson.error?.code === 'INVALID_ISSUER', 'Error code is INVALID_ISSUER');
+
+  // 8. Test Firebase Auth RS256 Verification & Cross-Firebase-User Isolation
+  console.log('\n8. Testing Firebase Auth RS256 Token Verification & Cross-Firebase-User Isolation:');
+  const firebaseKeyPair = await crypto.subtle.generateKey(
+    {
+      name: 'RSASSA-PKCS1-v1_5',
+      modulusLength: 2048,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: 'SHA-256',
+    },
+    true,
+    ['sign', 'verify']
+  );
+
+  const testKid = 'firebase_test_kid_01';
+  registerTestPublicKey(testKid, firebaseKeyPair.publicKey);
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const firebaseProdEnv: Env = {
+    DB: d1,
+    ENVIRONMENT: 'production',
+    FIREBASE_PROJECT_ID: 'orbit-2-auth',
+  };
+
+  const createFbToken = async (
+    overrides: Record<string, any> = {},
+    kid: string = testKid,
+    privKey = firebaseKeyPair.privateKey
+  ) => {
+    const header = { alg: 'RS256', kid, typ: 'JWT' };
+    const payload = {
+      iss: 'https://securetoken.google.com/orbit-2-auth',
+      aud: 'orbit-2-auth',
+      sub: 'fb_usr_alice_101',
+      iat: nowSec - 10,
+      exp: nowSec + 3600,
+      auth_time: nowSec - 10,
+      email: 'alice@orbit.internal',
+      name: 'Alice Firebase',
+      ...overrides,
+    };
+    return signRs256Jwt(header, payload, privKey);
+  };
+
+  // Test 8.1: Valid Firebase RS256 token returns 200 and syncs user to D1
+  const validFbToken = await createFbToken();
+  const validFbRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      headers: { Authorization: `Bearer ${validFbToken}` },
+    }),
+    firebaseProdEnv
+  );
+  assert(validFbRes.status === 200, 'Valid RS256 Firebase ID token accepted in production (200 OK)');
+
+  // Test 8.2: Expired Firebase token rejected
+  const expiredFbToken = await createFbToken({ exp: nowSec - 300 });
+  const expiredFbRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      headers: { Authorization: `Bearer ${expiredFbToken}` },
+    }),
+    firebaseProdEnv
+  );
+  const expiredFbJson: any = await expiredFbRes.json();
+  assert(expiredFbRes.status === 401, 'Expired Firebase token rejected with 401 Unauthorized');
+  assert(expiredFbJson.error?.code === 'TOKEN_EXPIRED', 'Error code is TOKEN_EXPIRED');
+
+  // Test 8.3: Tampered signature on Firebase ID token
+  const tamperedFbToken = validFbToken.slice(0, -4) + 'AAAA';
+  const tamperedFbRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      headers: { Authorization: `Bearer ${tamperedFbToken}` },
+    }),
+    firebaseProdEnv
+  );
+  const tamperedFbJson: any = await tamperedFbRes.json();
+  assert(tamperedFbRes.status === 401, 'Tampered RS256 signature rejected with 401');
+  assert(tamperedFbJson.error?.code === 'INVALID_SIGNATURE', 'Error code is INVALID_SIGNATURE');
+
+  // Test 8.4: Token with wrong project audience rejected
+  const wrongAudToken = await createFbToken({ aud: 'wrong-firebase-project' });
+  const wrongAudRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      headers: { Authorization: `Bearer ${wrongAudToken}` },
+    }),
+    firebaseProdEnv
+  );
+  const wrongAudJson: any = await wrongAudRes.json();
+  assert(wrongAudRes.status === 401, 'Token with wrong audience rejected (401)');
+  assert(wrongAudJson.error?.code === 'WRONG_PROJECT', 'Error code is WRONG_PROJECT');
+
+  // Test 8.5: Token with wrong project issuer rejected
+  const wrongIssToken = await createFbToken({ iss: 'https://securetoken.google.com/different-project' });
+  const wrongIssRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      headers: { Authorization: `Bearer ${wrongIssToken}` },
+    }),
+    firebaseProdEnv
+  );
+  const wrongIssJson: any = await wrongIssRes.json();
+  assert(wrongIssRes.status === 401, 'Token with wrong issuer rejected (401)');
+  assert(wrongIssJson.error?.code === 'WRONG_PROJECT', 'Error code is WRONG_PROJECT');
+
+  // Test 8.6: Unknown signing key kid rejected
+  const unknownKidToken = await createFbToken({}, 'unknown_rogue_kid');
+  const unknownKidRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      headers: { Authorization: `Bearer ${unknownKidToken}` },
+    }),
+    firebaseProdEnv
+  );
+  const unknownKidJson: any = await unknownKidRes.json();
+  assert(unknownKidRes.status === 401, 'Token with unknown kid rejected (401)');
+  assert(unknownKidJson.error?.code === 'UNKNOWN_SIGNING_KEY', 'Error code is UNKNOWN_SIGNING_KEY');
+
+  // Test 8.7: Token missing sub claim rejected
+  const missingSubToken = await createFbToken({ sub: '' });
+  const missingSubRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      headers: { Authorization: `Bearer ${missingSubToken}` },
+    }),
+    firebaseProdEnv
+  );
+  const missingSubJson: any = await missingSubRes.json();
+  assert(missingSubRes.status === 401, 'Token with empty sub claim rejected (401)');
+  assert(missingSubJson.error?.code === 'INVALID_TOKEN_CLAIMS', 'Error code is INVALID_TOKEN_CLAIMS');
+
+  // Test 8.8: Cross-Firebase-User Isolation
+  // Alice creates a task
+  const aliceTaskRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: "Alice's Firebase Confidential Deliverable",
+        priority: 'high',
+      }),
+    }),
+    firebaseProdEnv
+  );
+  const aliceTaskJson: any = await aliceTaskRes.json();
+  assert(aliceTaskRes.status === 201, "Alice's task created via Firebase token (201 Created)");
+  const aliceTaskId = aliceTaskJson.data.id;
+  assert(aliceTaskJson.data.userId === 'fb_usr_alice_101', 'Task assigned strictly to Alice UID');
+
+  // Bob token
+  const bobToken = await createFbToken({
+    sub: 'fb_usr_bob_202',
+    email: 'bob@orbit.internal',
+    name: 'Bob Firebase',
+  });
+
+  // Bob lists tasks: must NOT see Alice's task
+  const bobTasksRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      headers: { Authorization: `Bearer ${bobToken}` },
+    }),
+    firebaseProdEnv
+  );
+  const bobTasksJson: any = await bobTasksRes.json();
+  const aliceTaskSeenByBob = bobTasksJson.data?.some((t: any) => t.id === aliceTaskId);
+  assert(!aliceTaskSeenByBob, "Bob cannot see Alice's task in GET /api/v1/tasks");
+
+  // Bob tries to read Alice's task directly
+  const bobReadAliceTask = await worker.fetch(
+    new Request(`https://orbit.internal/api/v1/tasks/${aliceTaskId}`, {
+      headers: { Authorization: `Bearer ${bobToken}` },
+    }),
+    firebaseProdEnv
+  );
+  assert(bobReadAliceTask.status === 404, "Bob cannot read Alice's task by ID (404 Not Found)");
+
+  // Bob tries to delete Alice's task
+  const bobDeleteAliceTask = await worker.fetch(
+    new Request(`https://orbit.internal/api/v1/tasks/${aliceTaskId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${bobToken}` },
+    }),
+    firebaseProdEnv
+  );
+  assert(bobDeleteAliceTask.status === 404, "Bob cannot delete Alice's task (404 Not Found)");
+
+  // Test 8.9: Attempted identity hijacking via request body injection under Firebase auth
+  const bodyHijackRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/tasks', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${bobToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: "Bob's Task with attempted Alice userId spoof",
+        userId: 'fb_usr_alice_101',
+        user_id: 'fb_usr_alice_101',
+      }),
+    }),
+    firebaseProdEnv
+  );
+  const bodyHijackJson: any = await bodyHijackRes.json();
+  assert(bodyHijackRes.status === 201, 'Task created successfully');
+  assert(
+    bodyHijackJson.data.userId === 'fb_usr_bob_202',
+    'Task userId derived strictly from Bob verified sub claim ("fb_usr_bob_202"), not request body injection'
+  );
+
+  clearKeyCaches();
 
   console.log(`\n========================================`);
   console.log(`All Tests Finished: ${passed} Passed, ${failed} Failed`);

@@ -30,6 +30,12 @@ import { chatService } from '../services/chatService';
 import { taskService, MockTaskService } from '../services/taskService';
 import { projectService, MockProjectService } from '../services/projectService';
 import { apiClient } from '../services/apiClient';
+import {
+  auth,
+  logout as firebaseLogout,
+  onIdTokenChanged,
+  FirebaseUser,
+} from '../lib/firebase';
 
 export type PageView =
   | 'overview'
@@ -60,6 +66,14 @@ interface WorkspaceContextType {
   user: User;
   settings: UserSettings;
   updateSettings: (newSettings: Partial<UserSettings>) => void;
+
+  // Firebase Authentication
+  firebaseUser: FirebaseUser | null;
+  isAuthModalOpen: boolean;
+  authModalMode: 'login' | 'register';
+  openAuthModal: (mode?: 'login' | 'register') => void;
+  closeAuthModal: () => void;
+  logoutUser: () => Promise<void>;
 
   // Backend & Connection State
   isLoading: boolean;
@@ -171,8 +185,31 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Settings
   const [settings, setSettings] = useState<UserSettings>(() => settingsService.getSettings());
 
-  // User
-  const [user] = useState<User>(INITIAL_USER);
+  // User & Firebase Authentication State
+  const [user, setUser] = useState<User>(INITIAL_USER);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
+
+  const openAuthModal = (mode: 'login' | 'register' = 'login') => {
+    setAuthModalMode(mode);
+    setIsAuthModalOpen(true);
+  };
+
+  const closeAuthModal = () => {
+    setIsAuthModalOpen(false);
+  };
+
+  const logoutUser = async () => {
+    try {
+      await firebaseLogout();
+    } catch {}
+    apiClient.setAuthToken('');
+    setCurrentAuthTokenState('');
+    setUser(INITIAL_USER);
+    setFirebaseUser(null);
+    await refreshData();
+  };
 
   // Backend connection state
   const [isLoading, setIsLoading] = useState(false);
@@ -272,8 +309,33 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
+  // Firebase Auth Observer: Continuously synchronizes authenticated user and token
   useEffect(() => {
-    refreshData();
+    const unsubscribe = onIdTokenChanged(auth, async (fbUser) => {
+      setFirebaseUser(fbUser);
+      if (fbUser) {
+        try {
+          const idToken = await fbUser.getIdToken();
+          apiClient.setAuthToken(idToken);
+          setCurrentAuthTokenState(idToken);
+          setUser((prev) => ({
+            ...prev,
+            id: fbUser.uid,
+            name: fbUser.displayName || fbUser.email?.split('@')[0] || prev.name,
+            email: fbUser.email || prev.email,
+          }));
+        } catch {}
+      } else {
+        const currentTok = apiClient.getAuthToken();
+        if (currentTok && currentTok.startsWith('eyJ')) {
+          apiClient.setAuthToken('');
+          setCurrentAuthTokenState('');
+        }
+      }
+      refreshData();
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const testBackendHealth = async () => {
@@ -899,6 +961,13 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
         user,
         settings,
         updateSettings,
+        // Firebase Authentication
+        firebaseUser,
+        isAuthModalOpen,
+        authModalMode,
+        openAuthModal,
+        closeAuthModal,
+        logoutUser,
         // Backend & Connection State
         isLoading,
         apiError,

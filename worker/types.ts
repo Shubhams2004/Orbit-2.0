@@ -7,6 +7,10 @@ export interface Env {
   ENVIRONMENT?: string;
   API_VERSION?: string;
   JWT_SECRET?: string;
+  JWT_ISSUER?: string;
+  JWT_AUDIENCE?: string;
+  FIREBASE_PROJECT_ID?: string;
+  ALLOW_DEV_TOKENS?: string;
   ASSETS?: Fetcher;
 }
 

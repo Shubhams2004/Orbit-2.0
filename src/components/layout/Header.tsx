@@ -10,6 +10,9 @@ import {
   ChevronRight,
   Check,
   ExternalLink,
+  LogIn,
+  LogOut,
+  User as UserIcon,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -28,6 +31,9 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
     openQuickCreate,
     activities,
     user,
+    firebaseUser,
+    openAuthModal,
+    logoutUser,
   } = useWorkspace();
 
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -234,19 +240,43 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
           )}
         </button>
 
-        {/* User Avatar */}
-        <div
-          onClick={() => setCurrentPage('settings')}
-          className="cursor-pointer shrink-0 ml-1"
-          title="User profile & settings"
-        >
-          <img
-            src={user.avatarUrl}
-            alt={user.name}
-            referrerPolicy="no-referrer"
-            className="w-7 h-7 rounded-full object-cover ring-1 ring-neutral-700 hover:ring-indigo-500 transition-all"
-          />
-        </div>
+        {/* Authentication Action / User Profile */}
+        {firebaseUser ? (
+          <div className="flex items-center gap-2 ml-1">
+            <div
+              onClick={() => setCurrentPage('settings')}
+              className="cursor-pointer shrink-0 flex items-center gap-2 group"
+              title={`Signed in as ${firebaseUser.email}`}
+            >
+              <img
+                src={user.avatarUrl}
+                alt={user.name}
+                referrerPolicy="no-referrer"
+                className="w-7 h-7 rounded-full object-cover ring-1 ring-neutral-700 group-hover:ring-indigo-500 transition-all"
+              />
+              <span className="text-xs font-medium text-neutral-300 group-hover:text-white hidden lg:inline max-w-[120px] truncate">
+                {user.name}
+              </span>
+            </div>
+            <button
+              onClick={() => logoutUser()}
+              className="p-1.5 text-neutral-400 hover:text-rose-400 rounded-lg hover:bg-neutral-800/80 transition-colors"
+              title="Sign Out"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 ml-1">
+            <button
+              onClick={() => openAuthModal('login')}
+              className="flex items-center gap-1.5 py-1.5 px-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition-colors shadow-xs cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In</span>
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );

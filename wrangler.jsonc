@@ -20,6 +20,7 @@
   ],
   "vars": {
     "ENVIRONMENT": "production",
-    "API_VERSION": "v1"
+    "API_VERSION": "v1",
+    "FIREBASE_PROJECT_ID": "orbit-2-auth"
   }
 }

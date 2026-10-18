@@ -18,9 +18,18 @@ import { SettingsView } from './views/SettingsView';
 import { QuickCreateModal } from './components/modals/QuickCreateModal';
 import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
 import { ConfirmModal } from './components/modals/ConfirmModal';
+import { AuthModal } from './components/modals/AuthModal';
 
 const WorkspaceShell: React.FC = () => {
-  const { currentPage, settings, apiError, clearApiError } = useWorkspace();
+  const {
+    currentPage,
+    settings,
+    apiError,
+    clearApiError,
+    isAuthModalOpen,
+    authModalMode,
+    closeAuthModal,
+  } = useWorkspace();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -93,6 +102,11 @@ const WorkspaceShell: React.FC = () => {
       <QuickCreateModal />
       <CommandPaletteModal />
       <ConfirmModal />
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={closeAuthModal}
+        initialMode={authModalMode}
+      />
     </div>
   );
 };

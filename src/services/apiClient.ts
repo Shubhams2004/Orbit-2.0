@@ -22,14 +22,26 @@ export interface RequestOptions extends RequestInit {
 
 class ApiClient {
   private baseUrl: string;
-  private authToken: string = 'dev_usr_main_01'; // Default development bearer credential
+  private authToken: string;
 
   constructor() {
     this.baseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || '';
+    let saved = '';
+    try {
+      saved = localStorage.getItem('orbit_bearer_token') || '';
+    } catch {}
+    this.authToken = saved;
   }
 
   setAuthToken(token: string) {
-    this.authToken = token;
+    this.authToken = (token || '').trim();
+    try {
+      if (this.authToken) {
+        localStorage.setItem('orbit_bearer_token', this.authToken);
+      } else {
+        localStorage.removeItem('orbit_bearer_token');
+      }
+    } catch {}
   }
 
   getAuthToken(): string {
@@ -57,8 +69,11 @@ class ApiClient {
     const defaultHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
-      Authorization: `Bearer ${this.authToken}`,
     };
+
+    if (this.authToken) {
+      defaultHeaders['Authorization'] = `Bearer ${this.authToken}`;
+    }
 
     const config: RequestInit = {
       ...customConfig,

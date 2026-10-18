@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { TaskPriority } from '../types';
 import {
@@ -32,6 +32,11 @@ export const SettingsView: React.FC = () => {
   } = useWorkspace();
 
   const [savedNotice, setSavedNotice] = useState(false);
+  const [tokenInput, setTokenInput] = useState(currentAuthToken);
+
+  useEffect(() => {
+    setTokenInput(currentAuthToken);
+  }, [currentAuthToken]);
 
   const showSaved = () => {
     setSavedNotice(true);
@@ -375,17 +380,47 @@ export const SettingsView: React.FC = () => {
         <div className="p-3 bg-neutral-950 border border-neutral-800 rounded-lg text-xs font-mono text-neutral-300 space-y-1.5">
           <div><span className="text-neutral-500">API Route:</span> /api/v1 (Tasks, Projects, Conversations)</div>
           <div><span className="text-neutral-500">Database Engine:</span> Cloudflare D1 SQLite (Binding: DB)</div>
-          <div><span className="text-neutral-500">Local Dev Command:</span> npm run dev:worker</div>
-          <div><span className="text-neutral-500">Local Migration Command:</span> npm run db:migrate:local</div>
-          <div><span className="text-neutral-500">Active Bearer Token:</span> {currentAuthToken}</div>
+          <div><span className="text-neutral-500">Verification:</span> Web Crypto HS256 JWT Verification</div>
+          <div><span className="text-neutral-500">Active Bearer Token:</span> <span className="break-all text-neutral-400">{currentAuthToken}</span></div>
         </div>
 
-        {/* Multi-user token test switch */}
-        <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        {/* Custom Bearer Token / Production JWT input */}
+        <div className="pt-2 space-y-2 text-xs">
+          <label className="font-semibold text-neutral-200 block">
+            Bearer Token / Production Signed JWT
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              placeholder="Paste signed HS256 JWT or dev bearer token"
+              className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-200 font-mono focus:outline-none focus:border-neutral-600"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (tokenInput.trim()) {
+                  setCurrentAuthToken(tokenInput.trim());
+                  showSaved();
+                }
+              }}
+              className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg text-xs font-medium border border-neutral-700 transition-colors"
+            >
+              Apply Token
+            </button>
+          </div>
+          <p className="text-[11px] text-neutral-400">
+            In production, a cryptographically signed HS256 JWT is required. Development tokens (<code className="text-neutral-300 font-mono">dev_*</code>) are strictly rejected in production.
+          </p>
+        </div>
+
+        {/* Multi-user token test switch (development sandbox) */}
+        <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs border-t border-neutral-800/80">
           <div>
-            <span className="font-semibold text-neutral-200 block">Test Multi-User Identity</span>
+            <span className="font-semibold text-neutral-200 block">Development Preset Tokens</span>
             <span className="text-[11px] text-neutral-400">
-              Switch authentication token to verify data isolation across users.
+              Switch development identity to test data isolation across users in local development.
             </span>
           </div>
           <div className="flex items-center gap-2">

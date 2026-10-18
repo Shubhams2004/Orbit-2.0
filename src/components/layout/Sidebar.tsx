@@ -33,6 +33,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     user,
     openQuickCreate,
     settings,
+    firebaseUser,
+    openAuthModal,
+    logoutUser,
   } = useWorkspace();
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -209,16 +212,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <ExternalLink className="w-3.5 h-3.5 text-neutral-400" />
             </a>
             <div className="my-1 border-t border-neutral-800" />
-            <button
-              onClick={() => {
-                setIsUserMenuOpen(false);
-                alert('Session locked. Orbit is ready for Cloudflare Workers Auth in next milestone.');
-              }}
-              className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 flex items-center justify-between"
-            >
-              <span>Lock Session</span>
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
+            {firebaseUser ? (
+              <button
+                onClick={() => {
+                  setIsUserMenuOpen(false);
+                  logoutUser();
+                }}
+                className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-rose-500/10 text-rose-400 hover:text-rose-300 flex items-center justify-between transition-colors"
+              >
+                <span>Sign Out</span>
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setIsUserMenuOpen(false);
+                  openAuthModal('login');
+                }}
+                className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-neutral-800 text-indigo-400 hover:text-indigo-300 flex items-center justify-between transition-colors"
+              >
+                <span>Sign In / Register</span>
+                <LogOut className="w-3.5 h-3.5 rotate-180" />
+              </button>
+            )}
           </div>
         )}
       </div>
