@@ -1,6 +1,6 @@
 import { ChatMessage, ChatAttachment, AgentAction, Task, Project } from '../types';
 import { agentService } from './agentService';
-import { apiClient } from './apiClient';
+import { apiClient, ApiError, isProductionEnv } from './apiClient';
 
 export interface SendMessageOptions {
   conversationId: string;
@@ -255,10 +255,58 @@ export class MockChatService implements IChatService {
         assistantMsgId = aiResult.messageId || assistantMsgId;
         activeModelName = aiResult.model || modelId;
       } else {
-        throw new Error('Empty AI response');
+        throw new ApiError('EMPTY_AI_RESPONSE', 'Empty AI response received from Cloudflare Workers AI.', 502);
       }
-    } catch {
-      // Local fallback in development when Workers AI binding is unavailable
+    } catch (err: unknown) {
+      const isAuthError =
+        (err instanceof ApiError && (err.status === 401 || err.status === 403 || err.code.includes('AUTH') || err.code.includes('TOKEN'))) ||
+        (err instanceof Error && (
+          err.message.includes('401') ||
+          err.message.includes('403') ||
+          err.message.toLowerCase().includes('token') ||
+          err.message.toLowerCase().includes('unauthorized') ||
+          err.message.toLowerCase().includes('bearer')
+        ));
+
+      // Never silently fall back to simulated responses on HTTP 401, 403, or authentication errors
+      if (isAuthError) {
+        const errorMsg = err instanceof Error ? err.message : 'Authentication required to use AI chat.';
+        const assistantErrorMsg: ChatMessage = {
+          id: assistantMsgId,
+          conversationId,
+          role: 'assistant',
+          content: `⚠️ Authentication Error: ${errorMsg}`,
+          timestamp: new Date().toISOString(),
+          modelUsed: modelId,
+          status: 'error',
+          errorMessage: errorMsg,
+          isSimulated: false,
+        };
+        messages.push(assistantErrorMsg);
+        this.saveMessages(conversationId, messages);
+        throw err;
+      }
+
+      // In production, never fall back to simulated responses for any error
+      if (isProductionEnv()) {
+        const errorMsg = err instanceof Error ? err.message : 'AI service unavailable in production.';
+        const assistantErrorMsg: ChatMessage = {
+          id: assistantMsgId,
+          conversationId,
+          role: 'assistant',
+          content: `⚠️ AI Service Error: ${errorMsg}`,
+          timestamp: new Date().toISOString(),
+          modelUsed: modelId,
+          status: 'error',
+          errorMessage: errorMsg,
+          isSimulated: false,
+        };
+        messages.push(assistantErrorMsg);
+        this.saveMessages(conversationId, messages);
+        throw err;
+      }
+
+      // Local fallback in non-production development only when Workers AI binding is unavailable
       const synthesized = await this.synthesizeResponse(
         content,
         modelId,

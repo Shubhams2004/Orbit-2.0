@@ -29,7 +29,7 @@ import { conversationService, INITIAL_CONVERSATIONS } from '../services/conversa
 import { chatService } from '../services/chatService';
 import { taskService, MockTaskService } from '../services/taskService';
 import { projectService, MockProjectService } from '../services/projectService';
-import { apiClient } from '../services/apiClient';
+import { apiClient, ApiError, isProductionEnv } from '../services/apiClient';
 import {
   auth,
   logout as firebaseLogout,
@@ -326,10 +326,14 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
           }));
         } catch {}
       } else {
+        // Clear stale development or cached tokens when Firebase has no authenticated user
         const currentTok = apiClient.getAuthToken();
-        if (currentTok && currentTok.startsWith('eyJ')) {
+        if (currentTok) {
           apiClient.setAuthToken('');
           setCurrentAuthTokenState('');
+          try {
+            localStorage.removeItem('orbit_bearer_token');
+          } catch {}
         }
       }
       refreshData();
@@ -758,6 +762,16 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (!content.trim() && attachments.length === 0) return;
     if (isChatStreaming) return;
 
+    // Require authentication before sending chat requests
+    // In production, an authenticated Firebase user is required.
+    // In development, require either an authenticated Firebase user or an active development token.
+    const hasValidAuth = firebaseUser !== null || (!isProductionEnv() && Boolean(currentAuthToken?.trim()));
+    if (!hasValidAuth) {
+      openAuthModal('login');
+      setApiError('Authentication is required to use Orbit AI chat. Please sign in to your account.');
+      return;
+    }
+
     let targetConvId = activeConversationId;
     let targetConv = conversations.find((c) => c.id === targetConvId);
 
@@ -779,9 +793,12 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
     abortControllerRef.current = abortController;
     setIsChatStreaming(true);
 
+    const tempUserMsgId = `msg_u_${Date.now()}`;
+    const tempAssistantMsgId = `msg_a_${Date.now()}`;
+
     try {
       const tempUserMsg: ChatMessage = {
-        id: `msg_u_${Date.now()}`,
+        id: tempUserMsgId,
         conversationId: targetConvId,
         role: 'user',
         content,
@@ -792,7 +809,7 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
       };
 
       const tempAssistantMsg: ChatMessage = {
-        id: `msg_a_${Date.now()}`,
+        id: tempAssistantMsgId,
         conversationId: targetConvId,
         role: 'assistant',
         content: '',
@@ -814,7 +831,7 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
         onChunk: (accumulated) => {
           setChatMessages((prev) =>
             prev.map((m) =>
-              m.id === tempAssistantMsg.id ? { ...m, content: accumulated } : m
+              m.id === tempAssistantMsgId ? { ...m, content: accumulated } : m
             )
           );
         },
@@ -830,6 +847,60 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
         entityType: 'agent',
       });
       setActivities((prev) => [act, ...prev]);
+    } catch (err: unknown) {
+      const errorMsg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+          ? err.message
+          : 'Failed to communicate with AI chat service.';
+
+      setApiError(errorMsg);
+
+      // If unauthorized, forbidden, or token expired, open AuthModal for the user
+      const isAuthIssue =
+        (err instanceof ApiError && (err.status === 401 || err.status === 403)) ||
+        errorMsg.toLowerCase().includes('token') ||
+        errorMsg.toLowerCase().includes('unauthorized') ||
+        errorMsg.toLowerCase().includes('firebase');
+
+      if (isAuthIssue) {
+        openAuthModal('login');
+      }
+
+      // Refresh to get any recorded error message from chatService, or update local placeholder
+      try {
+        const refreshed = await chatService.getMessages(targetConvId);
+        if (refreshed.length > 0) {
+          setChatMessages(refreshed);
+        } else {
+          setChatMessages((prev) =>
+            prev.map((m) =>
+              m.id === tempAssistantMsgId
+                ? {
+                    ...m,
+                    content: `⚠️ Error: ${errorMsg}`,
+                    status: 'error',
+                    errorMessage: errorMsg,
+                  }
+                : m
+            )
+          );
+        }
+      } catch {
+        setChatMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempAssistantMsgId
+              ? {
+                  ...m,
+                  content: `⚠️ Error: ${errorMsg}`,
+                  status: 'error',
+                  errorMessage: errorMsg,
+                }
+              : m
+          )
+        );
+      }
     } finally {
       setIsChatStreaming(false);
       abortControllerRef.current = null;

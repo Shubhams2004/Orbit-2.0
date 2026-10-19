@@ -5,6 +5,7 @@ import worker from '../worker/index';
 import { Env } from '../worker/types';
 import { signHs256Jwt, base64UrlEncode } from '../worker/utils/jwt';
 import { registerTestPublicKey, clearKeyCaches } from '../worker/utils/firebase-auth';
+import { isDevToken, ApiClient } from '../src/services/apiClient';
 
 async function signRs256Jwt(
   header: Record<string, unknown>,
@@ -857,6 +858,122 @@ async function runTests() {
   assert(failureAiRes.status === 502, 'AI model execution failure returns 502 Bad Gateway');
   assert(failureAiJson.error?.code === 'AI_GENERATION_FAILED', 'Error code is AI_GENERATION_FAILED');
   mockAiShouldFail = false;
+
+  // -------------------------------------------------------------
+  // 10. Fresh-Token Usage, Stale Development-Token Removal, Unauthorized Chat Behavior, & Production Bypass Restrictions
+  // -------------------------------------------------------------
+  console.log('\n10. Testing Fresh-Token Usage, Stale Development-Token Removal, Unauthorized Chat Behavior, & Production Bypass Restrictions:');
+
+  // Test 10.1: isDevToken identifies development and non-JWT tokens
+  assert(isDevToken('dev_usr_main_01') === true, 'isDevToken flags dev_usr_main_01 as dev token');
+  assert(isDevToken('dev_user_beta_02') === true, 'isDevToken flags dev_user_beta_02 as dev token');
+  assert(isDevToken('demo_user') === true, 'isDevToken flags demo_user as dev token');
+  assert(isDevToken('orbit_default_token') === true, 'isDevToken flags orbit_default_token as dev token');
+  assert(isDevToken('simple-string-without-dots') === true, 'isDevToken flags non-JWT string as dev token');
+
+  // Test 10.2: isDevToken accepts legitimate 3-part JWTs
+  assert(isDevToken(validFbToken) === false, 'isDevToken recognizes legitimate RS256 Firebase token as non-dev token');
+
+  // Test 10.3: ApiClient enforces production bypass restrictions and purges stale dev tokens
+  const savedNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  try {
+    const prodClient = new ApiClient();
+    prodClient.setAuthToken('dev_usr_main_01');
+    assert(prodClient.getAuthToken() === '', 'ApiClient strictly clears dev token in production');
+
+    prodClient.setAuthToken(validFbToken);
+    assert(prodClient.getAuthToken() === validFbToken, 'ApiClient stores verified token in production');
+
+    // Attempting to set dev token afterwards clears auth token again
+    prodClient.setAuthToken('dev_user_beta_02');
+    assert(prodClient.getAuthToken() === '', 'ApiClient purges subsequent dev token attempt in production');
+  } finally {
+    process.env.NODE_ENV = savedNodeEnv;
+  }
+
+  // Test 10.4: Unauthorized chat behavior - POST /api/v1/ai/chat with expired Firebase ID token
+  const expiredChatRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${expiredFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt: 'Hello with expired token' }),
+    }),
+    aiProdEnv
+  );
+  const expiredChatJson: any = await expiredChatRes.json();
+  assert(expiredChatRes.status === 401, 'POST /api/v1/ai/chat rejects expired token with 401 Unauthorized');
+  assert(expiredChatJson.error?.code === 'TOKEN_EXPIRED', 'Expired chat error code is TOKEN_EXPIRED');
+
+  // Test 10.5: Unauthorized chat behavior - POST /api/v1/ai/chat with development token in production
+  const devTokenChatRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer dev_usr_main_01',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt: 'Hello with dev token in production' }),
+    }),
+    aiProdEnv
+  );
+  const devTokenChatJson: any = await devTokenChatRes.json();
+  assert(devTokenChatRes.status === 401, 'POST /api/v1/ai/chat rejects development token in production with 401');
+  assert(
+    devTokenChatJson.error?.code === 'DEVELOPMENT_TOKEN_REJECTED',
+    'Dev token in production error code is DEVELOPMENT_TOKEN_REJECTED'
+  );
+
+  // Test 10.6: Unauthorized chat behavior - POST /api/v1/ai/chat with tampered RS256 token
+  const tamperedChatRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${tamperedFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt: 'Hello with tampered token' }),
+    }),
+    aiProdEnv
+  );
+  const tamperedChatJson: any = await tamperedChatRes.json();
+  assert(tamperedChatRes.status === 401, 'POST /api/v1/ai/chat rejects tampered token with 401');
+  assert(tamperedChatJson.error?.code === 'INVALID_SIGNATURE', 'Tampered chat token error code is INVALID_SIGNATURE');
+
+  // Test 10.7: Unauthorized chat behavior - POST /api/v1/ai/chat with wrong audience token
+  const wrongAudChatRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${wrongAudToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt: 'Hello with wrong audience' }),
+    }),
+    aiProdEnv
+  );
+  const wrongAudChatJson: any = await wrongAudChatRes.json();
+  assert(wrongAudChatRes.status === 401, 'POST /api/v1/ai/chat rejects wrong audience token with 401');
+  assert(wrongAudChatJson.error?.code === 'WRONG_PROJECT', 'Wrong audience chat error code is WRONG_PROJECT');
+
+  // Test 10.8: Unauthorized chat behavior - POST /api/v1/ai/chat with malformed token
+  const malformedChatRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer invalid.token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt: 'Hello with malformed token' }),
+    }),
+    aiProdEnv
+  );
+  const malformedChatJson: any = await malformedChatRes.json();
+  assert(malformedChatRes.status === 401, 'POST /api/v1/ai/chat rejects malformed token with 401');
+  assert(malformedChatJson.error?.code === 'MALFORMED_TOKEN', 'Malformed chat error code is MALFORMED_TOKEN');
 
   clearKeyCaches();
 

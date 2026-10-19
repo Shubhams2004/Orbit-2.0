@@ -4,6 +4,8 @@
  * Never exposes secrets; attaches authorization headers from current session.
  */
 
+import { getCurrentIdToken } from '../lib/firebase';
+
 export class ApiError extends Error {
   constructor(
     public code: string,
@@ -20,7 +22,25 @@ export interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
 }
 
-class ApiClient {
+export const isProductionEnv = (): boolean => {
+  return Boolean(
+    (typeof import.meta !== 'undefined' && import.meta.env?.PROD) ||
+    (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production')
+  );
+};
+
+export const isDevToken = (token: string): boolean => {
+  if (!token) return false;
+  const clean = token.trim();
+  return (
+    clean.startsWith('dev_') ||
+    clean === 'demo_user' ||
+    clean === 'orbit_default_token' ||
+    !clean.includes('.')
+  );
+};
+
+export class ApiClient {
   private baseUrl: string;
   private authToken: string;
 
@@ -30,11 +50,31 @@ class ApiClient {
     try {
       saved = localStorage.getItem('orbit_bearer_token') || '';
     } catch {}
+
+    // In production, never load development tokens from localStorage
+    if (isProductionEnv() && isDevToken(saved)) {
+      saved = '';
+      try {
+        localStorage.removeItem('orbit_bearer_token');
+      } catch {}
+    }
+
     this.authToken = saved;
   }
 
   setAuthToken(token: string) {
-    this.authToken = (token || '').trim();
+    const clean = (token || '').trim();
+
+    // In production, never accept development tokens
+    if (isProductionEnv() && isDevToken(clean)) {
+      this.authToken = '';
+      try {
+        localStorage.removeItem('orbit_bearer_token');
+      } catch {}
+      return;
+    }
+
+    this.authToken = clean;
     try {
       if (this.authToken) {
         localStorage.setItem('orbit_bearer_token', this.authToken);
@@ -71,8 +111,43 @@ class ApiClient {
       Accept: 'application/json',
     };
 
-    if (this.authToken) {
-      defaultHeaders['Authorization'] = `Bearer ${this.authToken}`;
+    // Obtain a fresh Firebase ID token if an active session exists
+    let effectiveToken = '';
+    try {
+      const freshFirebaseToken = await getCurrentIdToken();
+      if (freshFirebaseToken) {
+        effectiveToken = freshFirebaseToken;
+        this.authToken = freshFirebaseToken;
+      }
+    } catch {}
+
+    // Fall back to saved token only if fresh Firebase token is not available and token is valid for current environment
+    if (!effectiveToken && this.authToken) {
+      if (isProductionEnv()) {
+        if (isDevToken(this.authToken)) {
+          this.authToken = '';
+          try {
+            localStorage.removeItem('orbit_bearer_token');
+          } catch {}
+        } else {
+          effectiveToken = this.authToken;
+        }
+      } else {
+        effectiveToken = this.authToken;
+      }
+    }
+
+    // Never attach development tokens in production
+    if (effectiveToken && isProductionEnv() && isDevToken(effectiveToken)) {
+      effectiveToken = '';
+      this.authToken = '';
+      try {
+        localStorage.removeItem('orbit_bearer_token');
+      } catch {}
+    }
+
+    if (effectiveToken) {
+      defaultHeaders['Authorization'] = `Bearer ${effectiveToken}`;
     }
 
     const config: RequestInit = {

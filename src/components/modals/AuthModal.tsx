@@ -8,6 +8,7 @@ import {
 } from '../../lib/firebase';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { Lock, Mail, User, X, Loader2, ArrowRight, ShieldCheck, Key, AlertTriangle } from 'lucide-react';
+import { isProductionEnv } from '../../services/apiClient';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -68,6 +69,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   const handleDevBypass = async (devToken: string) => {
+    if (isProductionEnv()) {
+      setError('Development bypass is disabled in production. Please sign in with Firebase.');
+      return;
+    }
     setCurrentAuthToken(devToken);
     await refreshData();
     onClose();
@@ -264,29 +269,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </button>
         </form>
 
-        {/* Development sandbox bypass helper */}
-        <div className="mt-5 pt-4 border-t border-neutral-800/80">
-          <div className="flex items-center justify-between text-[11px] text-neutral-400 mb-2">
-            <span>Development Bypass</span>
-            <span className="text-[10px] text-neutral-500 font-mono">(dev/test only)</span>
+        {/* Development sandbox bypass helper (disabled in production) */}
+        {!isProductionEnv() && (
+          <div className="mt-5 pt-4 border-t border-neutral-800/80">
+            <div className="flex items-center justify-between text-[11px] text-neutral-400 mb-2">
+              <span>Development Bypass</span>
+              <span className="text-[10px] text-neutral-500 font-mono">(dev/test only)</span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => handleDevBypass('dev_usr_main_01')}
+                className="flex-1 py-1.5 px-2 bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 rounded text-neutral-300 hover:text-white text-[11px] transition-colors"
+              >
+                Sign in as Dev User 1
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDevBypass('dev_user_beta_02')}
+                className="flex-1 py-1.5 px-2 bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 rounded text-neutral-300 hover:text-white text-[11px] transition-colors"
+              >
+                Sign in as Dev User 2
+              </button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => handleDevBypass('dev_usr_main_01')}
-              className="flex-1 py-1.5 px-2 bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 rounded text-neutral-300 hover:text-white text-[11px] transition-colors"
-            >
-              Sign in as Dev User 1
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDevBypass('dev_user_beta_02')}
-              className="flex-1 py-1.5 px-2 bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 rounded text-neutral-300 hover:text-white text-[11px] transition-colors"
-            >
-              Sign in as Dev User 2
-            </button>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
