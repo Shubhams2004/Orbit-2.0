@@ -99,6 +99,9 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[Orbit 2.0] Full-Stack server running at http://0.0.0.0:${PORT}`);
+    if (!isProduction) {
+      console.log('[Orbit 2.0] Note: Local server uses local SQLite D1 adapter. Cloudflare Workers AI binding is unavailable in local development and requires Cloudflare deployment or wrangler dev.');
+    }
   });
 }
 

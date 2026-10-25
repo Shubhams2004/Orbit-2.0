@@ -25,7 +25,11 @@ import {
 import { settingsService } from '../services/settingsService';
 import { activityService } from '../services/activityService';
 import { agentService } from '../services/agentService';
-import { conversationService, INITIAL_CONVERSATIONS } from '../services/conversationService';
+import {
+  conversationService,
+  INITIAL_CONVERSATIONS,
+  isDemoConversationId,
+} from '../services/conversationService';
 import { chatService } from '../services/chatService';
 import { taskService, MockTaskService } from '../services/taskService';
 import { projectService, MockProjectService } from '../services/projectService';
@@ -208,6 +212,13 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
     setCurrentAuthTokenState('');
     setUser(INITIAL_USER);
     setFirebaseUser(null);
+    setConversations([]);
+    setActiveConversationId('');
+    setChatMessages([]);
+    try {
+      localStorage.removeItem('orbit_bearer_token');
+      localStorage.removeItem('orbit_conversations_v2');
+    } catch {}
     await refreshData();
   };
 
@@ -263,35 +274,41 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
   const [isAgentThinking, setIsAgentThinking] = useState(false);
 
-  // Chat Terminal State
+  // Chat Terminal State - never load demo seed conversation IDs for authenticated users
   const [conversations, setConversations] = useState<Conversation[]>(() => {
     try {
       const saved = localStorage.getItem('orbit_conversations_v2');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((c: any) => !isDemoConversationId(c?.id));
+        }
+      }
     } catch {}
-    return INITIAL_CONVERSATIONS;
+    return [];
   });
 
-  const [activeConversationId, setActiveConversationId] = useState<string>(
-    INITIAL_CONVERSATIONS[0]?.id || 'conv_plan_today'
-  );
+  const [activeConversationId, setActiveConversationId] = useState<string>('');
 
-  const [selectedModelId, setSelectedModelId] = useState<string>(
-    INITIAL_CONVERSATIONS[0]?.modelId || 'orbit-agent-v2'
-  );
+  const [selectedModelId, setSelectedModelId] = useState<string>('orbit-agent-v2');
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatStreaming, setIsChatStreaming] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Load initial backend data from Cloudflare Worker API
+  // Load backend data from Cloudflare Worker API
   const refreshData = async () => {
     setIsLoading(true);
     setApiError(null);
     try {
-      const [fetchedTasks, fetchedProjects] = await Promise.all([
+      const isAuth = Boolean(
+        firebaseUser !== null || (!isProductionEnv() && apiClient.getAuthToken()?.trim())
+      );
+
+      const [fetchedTasks, fetchedProjects, fetchedConvs] = await Promise.all([
         taskService.getTasks(),
         projectService.getProjects(),
+        isAuth ? conversationService.getConversations() : Promise.resolve([]),
       ]);
 
       if (Array.isArray(fetchedTasks)) {
@@ -300,6 +317,31 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
       if (Array.isArray(fetchedProjects)) {
         setProjects(fetchedProjects);
       }
+
+      if (isAuth && Array.isArray(fetchedConvs)) {
+        // Filter out any demo conversations so demo IDs are never used for authenticated users
+        const userConversations = fetchedConvs.filter(
+          (c) => !isDemoConversationId(c.id)
+        );
+        setConversations(userConversations);
+
+        // Reset stale active conversation state and select a conversation belonging to that user
+        setActiveConversationId((prevActive) => {
+          if (
+            prevActive &&
+            !isDemoConversationId(prevActive) &&
+            userConversations.some((c) => c.id === prevActive)
+          ) {
+            return prevActive;
+          }
+          return userConversations.length > 0 ? userConversations[0].id : '';
+        });
+      } else if (!isAuth) {
+        setConversations([]);
+        setActiveConversationId('');
+        setChatMessages([]);
+      }
+
       setBackendStatus('connected');
     } catch (err: unknown) {
       // In local development before worker is spawned, fallback to seed records
@@ -335,6 +377,12 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
             localStorage.removeItem('orbit_bearer_token');
           } catch {}
         }
+        setConversations([]);
+        setActiveConversationId('');
+        setChatMessages([]);
+        try {
+          localStorage.removeItem('orbit_conversations_v2');
+        } catch {}
       }
       refreshData();
     });
@@ -716,33 +764,40 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
       title: title || 'New Conversation',
       modelId: modelId || selectedModelId,
     });
-    setConversations((prev) => [newConv, ...prev]);
+    setConversations((prev) => [
+      newConv,
+      ...prev.filter((c) => c.id !== newConv.id && !isDemoConversationId(c.id)),
+    ]);
     setActiveConversationId(newConv.id);
     setChatMessages([]);
     return newConv;
   };
 
   const renameConversation = async (id: string, newTitle: string) => {
-    await conversationService.renameConversation(id, newTitle);
+    if (!isDemoConversationId(id)) {
+      try {
+        await conversationService.renameConversation(id, newTitle);
+      } catch {}
+    }
     setConversations((prev) =>
       prev.map((c) => (c.id === id ? { ...c, title: newTitle } : c))
     );
   };
 
   const deleteConversation = async (id: string) => {
-    await conversationService.deleteConversation(id);
-    const updated = conversations.filter((c) => c.id !== id);
+    if (!isDemoConversationId(id)) {
+      try {
+        await conversationService.deleteConversation(id);
+      } catch {}
+    }
+    const updated = conversations.filter((c) => c.id !== id && !isDemoConversationId(c.id));
     setConversations(updated);
     if (activeConversationId === id) {
       if (updated.length > 0) {
         setActiveConversationId(updated[0].id);
       } else {
-        const fresh = await conversationService.createConversation({
-          title: 'New Conversation',
-          modelId: selectedModelId,
-        });
-        setConversations([fresh]);
-        setActiveConversationId(fresh.id);
+        setActiveConversationId('');
+        setChatMessages([]);
       }
     }
   };
@@ -772,21 +827,16 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
       return;
     }
 
+    // Stop using demo/seed conversation IDs for authenticated server requests
     let targetConvId = activeConversationId;
-    let targetConv = conversations.find((c) => c.id === targetConvId);
+    if (isDemoConversationId(targetConvId)) {
+      targetConvId = '';
+    }
 
+    // Verify conversation exists in the user's conversation list
+    let targetConv = targetConvId ? conversations.find((c) => c.id === targetConvId) : undefined;
     if (!targetConv) {
-      targetConv = await createNewConversation(
-        conversationService.generateTitleFromPrompt(content),
-        selectedModelId
-      );
-      targetConvId = targetConv.id;
-    } else if (
-      targetConv.title === 'New Conversation' ||
-      chatMessages.length === 0
-    ) {
-      const generatedTitle = conversationService.generateTitleFromPrompt(content);
-      renameConversation(targetConvId, generatedTitle);
+      targetConvId = '';
     }
 
     const abortController = new AbortController();
@@ -820,7 +870,7 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       setChatMessages((prev) => [...prev, tempUserMsg, tempAssistantMsg]);
 
-      await chatService.sendMessage({
+      const assistantResult = await chatService.sendMessage({
         conversationId: targetConvId,
         content,
         modelId: selectedModelId,
@@ -837,8 +887,28 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
         },
       });
 
-      const refreshed = await chatService.getMessages(targetConvId);
-      setChatMessages(refreshed);
+      // The final conversation ID could be the auto-created ID from the server
+      const finalConvId = assistantResult?.conversationId || targetConvId;
+
+      if (finalConvId && finalConvId !== activeConversationId) {
+        setActiveConversationId(finalConvId);
+      }
+
+      // Re-fetch conversations from the authenticated server API to ensure sidebar has new conversation
+      try {
+        const refreshedConvs = await conversationService.getConversations();
+        if (Array.isArray(refreshedConvs)) {
+          const userConvs = refreshedConvs.filter((c) => !isDemoConversationId(c.id));
+          setConversations(userConvs);
+        }
+      } catch {}
+
+      if (finalConvId) {
+        const refreshed = await chatService.getMessages(finalConvId);
+        if (refreshed.length > 0) {
+          setChatMessages(refreshed);
+        }
+      }
 
       const act = activityService.logActivity({
         type: 'agent_run_completed',
@@ -868,39 +938,28 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
         openAuthModal('login');
       }
 
-      // Refresh to get any recorded error message from chatService, or update local placeholder
-      try {
-        const refreshed = await chatService.getMessages(targetConvId);
-        if (refreshed.length > 0) {
-          setChatMessages(refreshed);
-        } else {
-          setChatMessages((prev) =>
-            prev.map((m) =>
-              m.id === tempAssistantMsgId
-                ? {
-                    ...m,
-                    content: `⚠️ Error: ${errorMsg}`,
-                    status: 'error',
-                    errorMessage: errorMsg,
-                  }
-                : m
-            )
-          );
-        }
-      } catch {
-        setChatMessages((prev) =>
-          prev.map((m) =>
-            m.id === tempAssistantMsgId
-              ? {
-                  ...m,
-                  content: `⚠️ Error: ${errorMsg}`,
-                  status: 'error',
-                  errorMessage: errorMsg,
-                }
-              : m
-          )
-        );
+      if (targetConvId) {
+        try {
+          const refreshed = await chatService.getMessages(targetConvId);
+          if (refreshed.length > 0) {
+            setChatMessages(refreshed);
+            return;
+          }
+        } catch {}
       }
+
+      setChatMessages((prev) =>
+        prev.map((m) =>
+          m.id === tempAssistantMsgId
+            ? {
+                ...m,
+                content: `⚠️ Error: ${errorMsg}`,
+                status: 'error',
+                errorMessage: errorMsg,
+              }
+            : m
+        )
+      );
     } finally {
       setIsChatStreaming(false);
       abortControllerRef.current = null;
@@ -1011,8 +1070,14 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
     setProjects(INITIAL_PROJECTS);
     setActivities(INITIAL_ACTIVITIES);
     setAgentMessages(INITIAL_AGENT_MESSAGES);
-    setConversations(INITIAL_CONVERSATIONS);
-    setActiveConversationId(INITIAL_CONVERSATIONS[0].id);
+    if (!firebaseUser && !isProductionEnv() && !apiClient.getAuthToken()) {
+      setConversations(INITIAL_CONVERSATIONS);
+      setActiveConversationId(INITIAL_CONVERSATIONS[0]?.id || '');
+    } else {
+      setConversations([]);
+      setActiveConversationId('');
+      setChatMessages([]);
+    }
     localStorage.removeItem('orbit_tasks_v2');
     localStorage.removeItem('orbit_projects_v2');
     localStorage.removeItem('orbit_activities_v2');

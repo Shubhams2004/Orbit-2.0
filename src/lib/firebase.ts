@@ -183,6 +183,8 @@ export function formatFirebaseAuthError(error: unknown): string {
   switch (err.code) {
     case 'auth/api-key-not-valid':
       return 'Firebase API key is invalid or not yet configured for project "orbit-2-auth". Please set VITE_FIREBASE_API_KEY in your Cloudflare build variables or project settings.';
+    case 'auth/internal-error':
+      return 'Firebase Authentication encountered an internal error. Please verify your Firebase project configuration (VITE_FIREBASE_API_KEY) and network connectivity, then try again.';
     case 'auth/invalid-credential':
     case 'auth/wrong-password':
     case 'auth/user-not-found':
@@ -202,6 +204,9 @@ export function formatFirebaseAuthError(error: unknown): string {
     case 'auth/operation-not-allowed':
       return 'Email/password sign-in is not enabled in your Firebase console. Please enable it under Authentication > Sign-in method.';
     default:
+      if (typeof err.message === 'string' && (err.message.includes('auth/internal-error') || err.message.includes('internal error'))) {
+        return 'Firebase Authentication encountered an internal error. Please verify your Firebase project configuration (VITE_FIREBASE_API_KEY) and network connectivity.';
+      }
       return err.message || 'Authentication failed. Please check your credentials.';
   }
 }

@@ -36,6 +36,17 @@ export const INITIAL_CONVERSATIONS: Conversation[] = [
   },
 ];
 
+export const DEMO_CONVERSATION_IDS = ['conv_plan_today', 'conv_soc2_audit'];
+
+export const isDemoConversationId = (id?: string | null): boolean => {
+  if (!id) return false;
+  return (
+    DEMO_CONVERSATION_IDS.includes(id) ||
+    id === 'conv_cf_workers' ||
+    INITIAL_CONVERSATIONS.some((c) => c.id === id)
+  );
+};
+
 /**
  * Production API Conversation Service
  * Dispatches real HTTP requests to Cloudflare Workers API (/api/v1/conversations).

@@ -1,6 +1,7 @@
 import { ChatMessage, ChatAttachment, AgentAction, Task, Project } from '../types';
 import { agentService } from './agentService';
 import { apiClient, ApiError, isProductionEnv } from './apiClient';
+import { isDemoConversationId } from './conversationService';
 
 export interface SendMessageOptions {
   conversationId: string;
@@ -184,6 +185,38 @@ export class MockChatService implements IChatService {
   }
 
   async getMessages(conversationId: string): Promise<ChatMessage[]> {
+    if (!conversationId) return [];
+
+    // Fetch persisted messages from server for real user conversations
+    if (!isDemoConversationId(conversationId)) {
+      try {
+        const serverMsgs = await apiClient.get<
+          Array<{
+            id: string;
+            conversationId: string;
+            role: 'user' | 'assistant' | 'system';
+            content: string;
+            createdAt: string;
+          }>
+        >(`/api/v1/conversations/${conversationId}/messages`);
+
+        if (Array.isArray(serverMsgs) && serverMsgs.length > 0) {
+          const mapped: ChatMessage[] = serverMsgs.map((m) => ({
+            id: m.id,
+            conversationId: m.conversationId,
+            role: m.role,
+            content: m.content,
+            timestamp: m.createdAt,
+            status: 'complete' as const,
+          }));
+          this.saveMessages(conversationId, mapped);
+          return mapped;
+        }
+      } catch {
+        // Fall back to locally cached messages
+      }
+    }
+
     return this.loadMessages(conversationId);
   }
 
@@ -215,12 +248,17 @@ export class MockChatService implements IChatService {
       projectsContext = [],
     } = options;
 
-    const messages = this.loadMessages(conversationId);
+    let targetConvId = conversationId;
+    // Never send demo or seed conversation IDs to the API
+    const isTargetDemo = isDemoConversationId(conversationId);
+    const apiConversationId = !isTargetDemo && conversationId?.trim() ? conversationId.trim() : undefined;
+
+    const messages = targetConvId ? this.loadMessages(targetConvId) : [];
 
     // 1. Record User Message
     const userMsg: ChatMessage = {
       id: `msg_u_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      conversationId,
+      conversationId: targetConvId,
       role: 'user',
       content,
       timestamp: new Date().toISOString(),
@@ -230,7 +268,9 @@ export class MockChatService implements IChatService {
     };
 
     messages.push(userMsg);
-    this.saveMessages(conversationId, messages);
+    if (targetConvId) {
+      this.saveMessages(targetConvId, messages);
+    }
 
     // 2. Obtain AI Response (Live Cloudflare Workers AI with graceful local fallback)
     let fullText = '';
@@ -247,13 +287,19 @@ export class MockChatService implements IChatService {
         model: string;
       }>('/api/v1/ai/chat', {
         prompt: content,
-        conversationId,
+        conversationId: apiConversationId,
       });
 
       if (aiResult && aiResult.response) {
         fullText = aiResult.response;
         assistantMsgId = aiResult.messageId || assistantMsgId;
         activeModelName = aiResult.model || modelId;
+
+        // When the server creates a new conversation, update the target conversation ID
+        if (aiResult.conversationId) {
+          targetConvId = aiResult.conversationId;
+          userMsg.conversationId = targetConvId;
+        }
       } else {
         throw new ApiError('EMPTY_AI_RESPONSE', 'Empty AI response received from Cloudflare Workers AI.', 502);
       }
@@ -273,7 +319,7 @@ export class MockChatService implements IChatService {
         const errorMsg = err instanceof Error ? err.message : 'Authentication required to use AI chat.';
         const assistantErrorMsg: ChatMessage = {
           id: assistantMsgId,
-          conversationId,
+          conversationId: targetConvId,
           role: 'assistant',
           content: `⚠️ Authentication Error: ${errorMsg}`,
           timestamp: new Date().toISOString(),
@@ -283,7 +329,9 @@ export class MockChatService implements IChatService {
           isSimulated: false,
         };
         messages.push(assistantErrorMsg);
-        this.saveMessages(conversationId, messages);
+        if (targetConvId) {
+          this.saveMessages(targetConvId, messages);
+        }
         throw err;
       }
 
@@ -292,7 +340,7 @@ export class MockChatService implements IChatService {
         const errorMsg = err instanceof Error ? err.message : 'AI service unavailable in production.';
         const assistantErrorMsg: ChatMessage = {
           id: assistantMsgId,
-          conversationId,
+          conversationId: targetConvId,
           role: 'assistant',
           content: `⚠️ AI Service Error: ${errorMsg}`,
           timestamp: new Date().toISOString(),
@@ -302,7 +350,9 @@ export class MockChatService implements IChatService {
           isSimulated: false,
         };
         messages.push(assistantErrorMsg);
-        this.saveMessages(conversationId, messages);
+        if (targetConvId) {
+          this.saveMessages(targetConvId, messages);
+        }
         throw err;
       }
 
@@ -322,7 +372,7 @@ export class MockChatService implements IChatService {
     // 3. Simulate Streaming with Chunks for Responsive UI
     const assistantMsg: ChatMessage = {
       id: assistantMsgId,
-      conversationId,
+      conversationId: targetConvId,
       role: 'assistant',
       content: '',
       timestamp: new Date().toISOString(),
@@ -333,7 +383,9 @@ export class MockChatService implements IChatService {
     };
 
     messages.push(assistantMsg);
-    this.saveMessages(conversationId, messages);
+    if (targetConvId) {
+      this.saveMessages(targetConvId, messages);
+    }
 
     // Token-by-token streaming simulation
     const words = fullText.split(' ');
@@ -346,7 +398,7 @@ export class MockChatService implements IChatService {
         if (signal?.aborted) {
           assistantMsg.status = 'stopped';
           assistantMsg.content = accumulated + ' [Generation stopped by user]';
-          this.saveMessages(conversationId, messages);
+          if (targetConvId) this.saveMessages(targetConvId, messages);
           if (onChunk) onChunk(assistantMsg.content);
           return assistantMsg;
         }
@@ -361,13 +413,13 @@ export class MockChatService implements IChatService {
 
       assistantMsg.content = fullText;
       assistantMsg.status = 'complete';
-      this.saveMessages(conversationId, messages);
+      if (targetConvId) this.saveMessages(targetConvId, messages);
       if (onChunk) onChunk(fullText);
       return assistantMsg;
     } catch (err: unknown) {
       assistantMsg.status = 'error';
       assistantMsg.errorMessage = err instanceof Error ? err.message : 'Generation interrupted.';
-      this.saveMessages(conversationId, messages);
+      if (targetConvId) this.saveMessages(targetConvId, messages);
       return assistantMsg;
     }
   }

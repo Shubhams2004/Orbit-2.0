@@ -6,6 +6,8 @@ import { Env } from '../worker/types';
 import { signHs256Jwt, base64UrlEncode } from '../worker/utils/jwt';
 import { registerTestPublicKey, clearKeyCaches } from '../worker/utils/firebase-auth';
 import { isDevToken, ApiClient } from '../src/services/apiClient';
+import { isDemoConversationId, DEMO_CONVERSATION_IDS } from '../src/services/conversationService';
+import { formatFirebaseAuthError } from '../src/lib/firebase';
 
 async function signRs256Jwt(
   header: Record<string, unknown>,
@@ -974,6 +976,139 @@ async function runTests() {
   const malformedChatJson: any = await malformedChatRes.json();
   assert(malformedChatRes.status === 401, 'POST /api/v1/ai/chat rejects malformed token with 401');
   assert(malformedChatJson.error?.code === 'MALFORMED_TOKEN', 'Malformed chat error code is MALFORMED_TOKEN');
+
+  // -------------------------------------------------------------
+  // 11. Conversation Ownership, Demo ID Protection, User Isolation, & Auto-Creation
+  // -------------------------------------------------------------
+  console.log('\n11. Testing Conversation Ownership, Demo ID Protection, & User Isolation:');
+
+  // Test 11.1: Demo conversation ID detection
+  assert(isDemoConversationId('conv_plan_today') === true, 'conv_plan_today is recognized as demo conversation ID');
+  assert(isDemoConversationId('conv_soc2_audit') === true, 'conv_soc2_audit is recognized as demo conversation ID');
+  assert(isDemoConversationId('conv_user_778899') === false, 'User conversation ID is not recognized as demo');
+  assert(isDemoConversationId('') === false, 'Empty string is not recognized as demo');
+  assert(isDemoConversationId(undefined) === false, 'Undefined is not recognized as demo');
+
+  // Test 11.2: A Firebase user attempting to chat in demo conversation returns 404 NOT_FOUND
+  const demoChatAttemptRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: 'Testing chat in demo conversation',
+        conversationId: 'conv_plan_today',
+      }),
+    }),
+    aiProdEnv
+  );
+  const demoChatAttemptJson: any = await demoChatAttemptRes.json();
+  assert(demoChatAttemptRes.status === 404, 'Posting to demo conversation conv_plan_today returns 404 Not Found');
+  assert(demoChatAttemptJson.error?.code === 'NOT_FOUND', 'Error code is NOT_FOUND');
+
+  // Test 11.3: User Charlie (new user with no conversations) auto-creates a conversation when none provided
+  const charlieUid = 'fb_usr_charlie_303';
+  const charlieToken = await createFbToken({
+    sub: charlieUid,
+    email: 'charlie@orbit.io',
+    name: 'Charlie Davis',
+  });
+
+  const charlieChatRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${charlieToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: 'Charlie roadmap planning prompt',
+      }),
+    }),
+    aiProdEnv
+  );
+  const charlieChatJson: any = await charlieChatRes.json();
+  assert(charlieChatRes.status === 200, 'POST /api/v1/ai/chat succeeds for new user without conversationId');
+  assert(Boolean(charlieChatJson.data?.conversationId), 'Server auto-created and returned a new conversationId');
+  const charlieConvId = charlieChatJson.data.conversationId;
+  assert(!DEMO_CONVERSATION_IDS.includes(charlieConvId), 'Auto-created conversation is not a demo conversation ID');
+
+  // Verify Charlie owns this new conversation in D1
+  const charlieConvInDb = await d1.prepare('SELECT * FROM conversations WHERE id = ? AND user_id = ?')
+    .bind(charlieConvId, charlieUid)
+    .first();
+  assert(Boolean(charlieConvInDb), 'New conversation record safely persisted in D1 with Charlie UID');
+
+  // Test 11.4: Loading conversations returns ONLY that user's conversations
+  const charlieListRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/conversations', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${charlieToken}`,
+      },
+    }),
+    aiProdEnv
+  );
+  const charlieListJson: any = await charlieListRes.json();
+  assert(charlieListRes.status === 200, 'GET /api/v1/conversations succeeds for Charlie');
+  assert(Array.isArray(charlieListJson.data), 'Returns an array of conversations');
+  assert(charlieListJson.data.length === 1, 'Charlie has exactly 1 conversation');
+  assert(charlieListJson.data[0].id === charlieConvId, 'Charlie list contains Charlie auto-created conversation');
+  assert(
+    !charlieListJson.data.some((c: any) => c.id === 'conv_plan_today' || c.id === 'conv_soc2_audit'),
+    'Charlie conversation list does not contain demo conversations'
+  );
+
+  // Test 11.5: Cross-user conversation access prevention
+  // Charlie cannot read Alice's conversation messages
+  const crossGetMessagesRes = await worker.fetch(
+    new Request(`https://orbit.internal/api/v1/conversations/${createdConvId}/messages`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${charlieToken}`,
+      },
+    }),
+    aiProdEnv
+  );
+  assert(crossGetMessagesRes.status === 404, 'Charlie cannot read Alice conversation messages (404 Not Found)');
+
+  // Charlie cannot delete Alice's conversation
+  const crossDeleteConvRes = await worker.fetch(
+    new Request(`https://orbit.internal/api/v1/conversations/${createdConvId}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${charlieToken}`,
+      },
+    }),
+    aiProdEnv
+  );
+  assert(crossDeleteConvRes.status === 404, 'Charlie cannot delete Alice conversation (404 Not Found)');
+
+  // Charlie cannot post messages into Alice's conversation
+  const crossPostAiRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${charlieToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: 'Charlie attempting to post into Alice conversation',
+        conversationId: createdConvId,
+      }),
+    }),
+    aiProdEnv
+  );
+  assert(crossPostAiRes.status === 404, 'Charlie cannot post into Alice conversation (404 Not Found)');
+
+  // Test 11.6: formatFirebaseAuthError handles auth/internal-error clearly
+  const internalErrMsg = formatFirebaseAuthError({ code: 'auth/internal-error' });
+  assert(
+    internalErrMsg.includes('internal error') && internalErrMsg.includes('VITE_FIREBASE_API_KEY'),
+    'formatFirebaseAuthError maps auth/internal-error to clear actionable guidance'
+  );
 
   clearKeyCaches();
 
