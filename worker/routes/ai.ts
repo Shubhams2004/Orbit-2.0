@@ -1,7 +1,7 @@
 import { Env, AuthenticatedUser } from '../types';
 import { jsonResponse, errorResponse } from '../utils/response';
 
-const WORKERS_AI_MODEL = '@cf/meta/llama-3.1-8b-instruct';
+const WORKERS_AI_MODEL = '@cf/meta/llama-3.1-8b-instruct-fast';
 const SYSTEM_PROMPT =
   'You are Orbit, an intelligent personal workspace co-pilot. Provide clear, accurate, and concise assistance for task management, project planning, and technical productivity. Keep responses well-structured and helpful.';
 

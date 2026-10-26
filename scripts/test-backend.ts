@@ -755,7 +755,7 @@ async function runTests() {
   const autoConvJson: any = await autoConvRes.json();
   assert(autoConvRes.status === 200, 'POST /api/v1/ai/chat succeeds with 200 OK');
   assert(Boolean(autoConvJson.data?.conversationId), 'Conversation ID was created and returned');
-  assert(autoConvJson.data?.model === '@cf/meta/llama-3.1-8b-instruct', 'Model is @cf/meta/llama-3.1-8b-instruct');
+  assert(autoConvJson.data?.model === '@cf/meta/llama-3.1-8b-instruct-fast', 'Model is @cf/meta/llama-3.1-8b-instruct-fast');
   assert(Boolean(autoConvJson.data?.response), 'Assistant response text generated');
 
   const createdConvId = autoConvJson.data.conversationId;
