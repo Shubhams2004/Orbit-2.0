@@ -687,11 +687,13 @@ async function runTests() {
 
   // Setup Mock Workers AI Binding
   let mockAiShouldFail = false;
+  let lastCapturedMessages: Array<{ role: string; content: string }> = [];
   const mockAi: any = {
     async run(model: string, input: any) {
       if (mockAiShouldFail) {
         throw new Error('Cloudflare Workers AI inference engine rate limited');
       }
+      lastCapturedMessages = input.messages ? [...input.messages] : [];
       const lastMsg = input.messages[input.messages.length - 1];
       return {
         response: `[${model}] Processed request: "${lastMsg.content.slice(0, 40)}"`,
@@ -860,6 +862,211 @@ async function runTests() {
   assert(failureAiRes.status === 502, 'AI model execution failure returns 502 Bad Gateway');
   assert(failureAiJson.error?.code === 'AI_GENERATION_FAILED', 'Error code is AI_GENERATION_FAILED');
   mockAiShouldFail = false;
+
+  // Test 9.10: Regression - Most recent 8 messages are selected and supplied chronologically
+  const histConvId = 'conv_history_window_test';
+  await d1.prepare('INSERT INTO conversations (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+    .bind(histConvId, 'fb_usr_alice_101', 'History Window Test', '2026-10-26T01:00:00.000Z', '2026-10-26T01:00:00.000Z')
+    .run();
+
+  // Insert 12 messages with ordered timestamps
+  for (let i = 1; i <= 12; i++) {
+    const padded = i < 10 ? `0${i}` : `${i}`;
+    const role = i % 2 === 1 ? 'user' : 'assistant';
+    const timestamp = `2026-10-26T01:${padded}:00.000Z`;
+    await d1.prepare('INSERT INTO messages (id, conversation_id, user_id, role, content, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(`msg_hist_${padded}`, histConvId, 'fb_usr_alice_101', role, `History message ${padded}`, timestamp)
+      .run();
+  }
+
+  // Alice sends message 13
+  const histChatRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: 'History prompt 13',
+        conversationId: histConvId,
+      }),
+    }),
+    aiProdEnv
+  );
+  assert(histChatRes.status === 200, 'History test chat request succeeds with 200 OK');
+
+  // Verify messages provided to AI model
+  // Total expected in lastCapturedMessages: 1 system prompt + 8 history + 1 current prompt = 10 messages
+  assert(lastCapturedMessages.length === 10, 'Model received exactly 10 messages (1 system + 8 history + 1 prompt)');
+  assert(lastCapturedMessages[0].role === 'system', 'First message is system prompt');
+  // Messages 1 through 4 should be pruned. Messages 5 through 12 should be included in chronological order (05 to 12).
+  assert(lastCapturedMessages[1].content === 'History message 05', 'Earliest message in 8-message window is message 05');
+  assert(lastCapturedMessages[8].content === 'History message 12', 'Latest message in 8-message window is message 12');
+  assert(lastCapturedMessages[9].content === 'History prompt 13', 'Current prompt is at the end');
+  assert(lastCapturedMessages[9].role === 'user', 'Current prompt has role "user"');
+
+  // Verify chronological ordering of the 8 messages
+  let isChronological = true;
+  for (let idx = 1; idx <= 8; idx++) {
+    const expectedNum = idx + 4;
+    const expectedPadded = expectedNum < 10 ? `0${expectedNum}` : `${expectedNum}`;
+    if (lastCapturedMessages[idx].content !== `History message ${expectedPadded}`) {
+      isChronological = false;
+    }
+  }
+  assert(isChronological, 'The most recent 8 messages are strictly ordered chronologically');
+
+  // Verify no messages 01-04 were included
+  const hasPrunedMsg = lastCapturedMessages.some(m => m.content.includes('History message 01') || m.content.includes('History message 04'));
+  assert(!hasPrunedMsg, 'Older messages outside the 8-message window are excluded');
+
+  // Verify new user prompt is not duplicated in model input
+  const promptOccurrences = lastCapturedMessages.filter(m => m.content === 'History prompt 13');
+  assert(promptOccurrences.length === 1, 'New user message is not duplicated in model input');
+
+  // Test 9.11: Messages from another user are never included in AI context
+  const bobSecretConvId = 'conv_bob_secret_01';
+  await d1.prepare('INSERT INTO conversations (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+    .bind(bobSecretConvId, 'fb_usr_bob_202', 'Bob Secret Conversation', '2026-10-26T02:00:00.000Z', '2026-10-26T02:00:00.000Z')
+    .run();
+  await d1.prepare('INSERT INTO messages (id, conversation_id, user_id, role, content, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind('msg_bob_top_secret', bobSecretConvId, 'fb_usr_bob_202', 'user', 'TOP_SECRET_BOB_TOKEN_XYZ', '2026-10-26T02:01:00.000Z')
+    .run();
+
+  // Alice sends message in her own conversation
+  await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: 'Check for leaked context',
+        conversationId: histConvId,
+      }),
+    }),
+    aiProdEnv
+  );
+  const leakedBobData = lastCapturedMessages.some(m => m.content.includes('TOP_SECRET_BOB_TOKEN_XYZ'));
+  assert(!leakedBobData, 'Messages from another user conversation are never included in AI context');
+
+  // Test 9.12: Alice cannot access Bob conversation by supplying its ID
+  const aliceAccessBobRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: 'Trying to access Bob conversation',
+        conversationId: bobSecretConvId,
+      }),
+    }),
+    aiProdEnv
+  );
+  const aliceAccessBobJson: any = await aliceAccessBobRes.json();
+  assert(aliceAccessBobRes.status === 404, 'User cannot access another user conversation by supplying its ID (404 Not Found)');
+  assert(aliceAccessBobJson.error?.code === 'NOT_FOUND', 'Cross-user conversation access returns NOT_FOUND error code');
+
+  // Helper for D1 interception tests
+  function createFailingD1(baseD1: any, shouldFailQuery: (query: string, bindings: any[]) => boolean, errorToThrow: Error): any {
+    return {
+      ...baseD1,
+      prepare(query: string) {
+        const origStmt = baseD1.prepare(query);
+        return {
+          bind(...args: any[]) {
+            const boundStmt = origStmt.bind(...args);
+            return {
+              async first(colName?: string) {
+                if (shouldFailQuery(query, args)) throw errorToThrow;
+                return boundStmt.first(colName);
+              },
+              async all() {
+                if (shouldFailQuery(query, args)) throw errorToThrow;
+                return boundStmt.all();
+              },
+              async run() {
+                if (shouldFailQuery(query, args)) throw errorToThrow;
+                return boundStmt.run();
+              },
+            };
+          },
+        };
+      },
+    };
+  }
+
+  // Test 9.13: User-record synchronization failure stops processing
+  const userSyncFailD1 = createFailingD1(
+    d1,
+    (q) => q.includes('INSERT OR IGNORE INTO users'),
+    new Error('D1 storage constraint failure: users write lock')
+  );
+  const userSyncFailEnv: Env = {
+    ...aiProdEnv,
+    DB: userSyncFailD1,
+  };
+
+  const userSyncFailRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt: 'Test user sync failure' }),
+    }),
+    userSyncFailEnv
+  );
+  const userSyncFailJson: any = await userSyncFailRes.json();
+  assert(userSyncFailRes.status === 500, 'User-record synchronization failure stops processing with HTTP 500');
+  assert(userSyncFailJson.error?.code === 'USER_SYNC_FAILED', 'Error code is USER_SYNC_FAILED');
+  assert(
+    !userSyncFailJson.error?.message.includes('SQL') && !userSyncFailJson.error?.message.includes('lock'),
+    'User sync failure does not expose internal database or SQL error details'
+  );
+
+  // Test 9.14: Assistant-response persistence failure does not return false success
+  const assistantFailD1 = createFailingD1(
+    d1,
+    (q) => q.includes('INSERT INTO messages') && q.includes("'assistant'"),
+    new Error('D1 storage engine failure: disk write failure')
+  );
+  const assistantFailEnv: Env = {
+    ...aiProdEnv,
+    DB: assistantFailD1,
+  };
+
+  const assistantFailRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt: 'Test assistant persistence failure' }),
+    }),
+    assistantFailEnv
+  );
+  const assistantFailJson: any = await assistantFailRes.json();
+  assert(assistantFailRes.status === 500, 'Assistant-response persistence failure returns HTTP 500 (not false 200)');
+  assert(assistantFailJson.error?.code === 'PERSISTENCE_FAILED', 'Error code is PERSISTENCE_FAILED');
+  assert(
+    Boolean(assistantFailJson.error?.details?.conversationId),
+    'Preserves conversationId in error details for safe recovery'
+  );
+  assert(
+    Boolean(assistantFailJson.error?.details?.response),
+    'Preserves generated AI response in error details for recovery'
+  );
+  assert(
+    !assistantFailJson.error?.message.includes('SQL') && !assistantFailJson.error?.message.includes('disk write'),
+    'Assistant persistence failure does not expose SQL or database internals'
+  );
 
   // -------------------------------------------------------------
   // 10. Fresh-Token Usage, Stale Development-Token Removal, Unauthorized Chat Behavior, & Production Bypass Restrictions

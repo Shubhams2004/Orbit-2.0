@@ -66,7 +66,12 @@ export async function handleAiChat(
       .bind(user.id, userDisplayName, user.email || null, now, now)
       .run();
   } catch (err: unknown) {
-    console.warn('[AI Chat] User sync notice:', err);
+    console.error('[AI Chat] Failed to synchronize user profile record:', err);
+    return errorResponse(
+      'USER_SYNC_FAILED',
+      'Unable to establish user profile record required for conversation storage.',
+      500
+    );
   }
 
   // 3. Conversation Ownership & Creation (Strictly isolated by user.id)
@@ -98,10 +103,10 @@ export async function handleAiChat(
         .run();
     }
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Database error';
+    console.error('[AI Chat] Conversation access or creation failed:', err);
     return errorResponse(
       'DATABASE_ERROR',
-      `Failed to access or create conversation in database: ${message}`,
+      'Failed to access or create conversation in database.',
       500
     );
   }
@@ -116,15 +121,15 @@ export async function handleAiChat(
       .bind(userMsgId, conversationId, user.id, prompt, now)
       .run();
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Database error';
+    console.error('[AI Chat] Failed to persist user message in database:', err);
     return errorResponse(
       'DATABASE_ERROR',
-      `Failed to persist message in database: ${message}`,
+      'Failed to persist user message in database.',
       500
     );
   }
 
-  // 5. Retrieve Recent Conversation Context (Last 8 messages before this prompt)
+  // 5. Retrieve Recent Conversation Context (Most recent 8 messages before this prompt)
   const aiMessages: { role: string; content: string }[] = [
     { role: 'system', content: SYSTEM_PROMPT },
   ];
@@ -133,18 +138,20 @@ export async function handleAiChat(
     const priorHistory = await env.DB.prepare(
       `SELECT role, content FROM messages
        WHERE conversation_id = ? AND user_id = ? AND id != ?
-       ORDER BY created_at ASC LIMIT 8`
+       ORDER BY created_at DESC, id DESC LIMIT 8`
     )
       .bind(conversationId, user.id, userMsgId)
       .all<MessageHistoryRow>();
 
-    for (const m of priorHistory.results || []) {
+    // Reverse to chronological order (oldest to newest among the 8 most recent)
+    const historyRows = (priorHistory.results || []).slice().reverse();
+    for (const m of historyRows) {
       // Sanitize role to ensure client cannot inject rogue system prompts
       const role = m.role === 'assistant' ? 'assistant' : 'user';
       aiMessages.push({ role, content: m.content });
     }
   } catch (err: unknown) {
-    console.warn('[AI Chat] Context retrieval notice:', err);
+    console.error('[AI Chat] Context retrieval error:', err);
   }
 
   aiMessages.push({ role: 'user', content: prompt });
@@ -196,7 +203,17 @@ export async function handleAiChat(
       .bind(assistantNow, conversationId, user.id)
       .run();
   } catch (err: unknown) {
-    console.warn('[AI Chat] Assistant response persistence notice:', err);
+    console.error('[AI Chat] Failed to persist assistant response to database:', err);
+    return errorResponse(
+      'PERSISTENCE_FAILED',
+      'The AI response was generated successfully, but could not be saved to your conversation history.',
+      500,
+      {
+        conversationId,
+        response: assistantText,
+        messageId: assistantMsgId,
+      }
+    );
   }
 
   // 8. Return Clean JSON Response
