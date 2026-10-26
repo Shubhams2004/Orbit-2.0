@@ -203,11 +203,12 @@ async function syncUserRecord(user: AuthenticatedUser, env: Env): Promise<void> 
   if (!env.DB) return;
   try {
     const now = new Date().toISOString();
+    const displayName = user.displayName?.trim() || 'Orbit User';
     await env.DB.prepare(
       `INSERT OR IGNORE INTO users (id, display_name, email, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?)`
     )
-      .bind(user.id, user.displayName, user.email || null, now, now)
+      .bind(user.id, displayName, user.email || null, now, now)
       .run();
   } catch {
     // Best-effort user synchronization

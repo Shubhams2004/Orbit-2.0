@@ -16,7 +16,7 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "orbit-db",
+      "database_name": "orbit_d1_db",
       "database_id": "420df9b9-9036-4373-a92f-575602d986fa",
       "migrations_dir": "migrations"
     }
