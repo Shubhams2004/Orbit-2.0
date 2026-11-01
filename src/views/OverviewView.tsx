@@ -65,32 +65,32 @@ export const OverviewView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Greeting and Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-neutral-800/60">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-200 dark:border-neutral-800/60">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-100">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-neutral-100">
               Workspace Dashboard
             </h1>
-            <span className="text-xs text-neutral-400 font-normal hidden sm:inline">
+            <span className="text-xs text-slate-500 dark:text-neutral-400 font-normal hidden sm:inline">
               · {user.name}
             </span>
           </div>
-          <p className="text-xs text-neutral-400 mt-1 flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-neutral-400" />
+          <p className="text-xs text-slate-500 dark:text-neutral-400 mt-1 flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-slate-400 dark:text-neutral-400" />
             <span>Wednesday, October 14, 2026</span>
             <span aria-hidden="true">·</span>
             <span>Cloudflare D1 Synced</span>
             <span aria-hidden="true">·</span>
-            <span className="text-emerald-400 font-mono">Nominal</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-mono font-medium">Nominal</span>
           </p>
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
           <button
             onClick={() => setCurrentPage('landing')}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:text-white bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 dark:text-neutral-300 dark:hover:text-white dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:border-neutral-800 rounded-lg transition-colors shadow-2xs"
           >
-            <Globe className="w-3.5 h-3.5 text-indigo-400" />
+            <Globe className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
             <span>Landing Page</span>
           </button>
 
@@ -98,18 +98,18 @@ export const OverviewView: React.FC = () => {
             onClick={() => openQuickCreate('task')}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors shadow-xs"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-4 h-4" />
             <span>New Task</span>
           </button>
         </div>
       </div>
 
       {/* Prominent AI Assistant Command Center Entry */}
-      <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-4 sm:p-5 shadow-xs">
-        <div className="flex items-center gap-2 text-xs font-medium text-violet-400 mb-2">
+      <div className="bg-slate-100/90 border border-slate-200 dark:bg-neutral-900/90 dark:border-neutral-800 rounded-xl p-4 sm:p-5 shadow-xs">
+        <div className="flex items-center gap-2 text-xs font-medium text-violet-600 dark:text-violet-400 mb-2">
           <Sparkles className="w-4 h-4" />
           <span>Orbit AI Command Center</span>
-          <span className="text-neutral-500 text-[11px]">· Simulated Local Agent</span>
+          <span className="text-slate-400 dark:text-neutral-500 text-[11px]">· Simulated Local Agent</span>
         </div>
 
         <form onSubmit={handleAiSubmit} className="flex items-center gap-2">
@@ -119,12 +119,12 @@ export const OverviewView: React.FC = () => {
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
               placeholder="Ask Orbit to plan your day, audit overdue items, or decompose a project..."
-              className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-100 placeholder-neutral-500 focus:outline-hidden focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-colors"
+              className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white border border-slate-200 dark:bg-neutral-950 dark:border-neutral-800 rounded-lg text-slate-900 placeholder-slate-400 dark:text-neutral-100 dark:placeholder-neutral-500 focus:outline-hidden focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-colors shadow-2xs"
             />
           </div>
           <button
             type="submit"
-            className="px-4 py-2.5 text-xs font-medium text-white bg-violet-600 hover:bg-violet-500 rounded-lg transition-colors flex items-center gap-1.5 shrink-0"
+            className="px-4 py-2.5 text-xs font-medium text-white bg-violet-600 hover:bg-violet-500 rounded-lg transition-colors flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
           >
             <Bot className="w-3.5 h-3.5" />
             <span>Engage Agent</span>
@@ -133,7 +133,7 @@ export const OverviewView: React.FC = () => {
 
         {/* Quick Suggestion Chips */}
         <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
-          <span className="text-[11px] text-neutral-500 mr-1">Suggested:</span>
+          <span className="text-[11px] text-slate-500 dark:text-neutral-500 mr-1">Suggested:</span>
           {[
             'Plan my day.',
             'Find overdue tasks.',
@@ -144,7 +144,7 @@ export const OverviewView: React.FC = () => {
               key={prompt}
               type="button"
               onClick={() => runQuickPrompt(prompt)}
-              className="px-2.5 py-1 text-[11px] text-neutral-300 bg-neutral-800/80 hover:bg-neutral-800 hover:text-white rounded-md transition-colors"
+              className="px-2.5 py-1 text-[11px] text-slate-700 bg-white hover:bg-slate-200/80 border border-slate-200 dark:border-transparent dark:text-neutral-300 dark:bg-neutral-800/80 dark:hover:bg-neutral-800 dark:hover:text-white rounded-md transition-colors shadow-2xs"
             >
               {prompt}
             </button>
@@ -157,69 +157,69 @@ export const OverviewView: React.FC = () => {
         {/* Due Today */}
         <div
           onClick={() => setCurrentPage('tasks')}
-          className="p-4 bg-neutral-900/60 border border-neutral-800 rounded-xl hover:border-neutral-700 transition-colors cursor-pointer group"
+          className="p-4 bg-white border border-slate-200 dark:bg-neutral-900/60 dark:border-neutral-800 rounded-xl hover:border-slate-300 dark:hover:border-neutral-700 transition-colors cursor-pointer group shadow-2xs"
         >
-          <div className="flex items-center justify-between text-xs text-neutral-400">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-neutral-400">
             <span>Due Today</span>
-            <Clock className="w-4 h-4 text-sky-400" />
+            <Clock className="w-4 h-4 text-sky-500 dark:text-sky-400" />
           </div>
-          <div className="mt-2 text-2xl font-bold font-mono text-neutral-100 tabular-nums">
+          <div className="mt-2 text-2xl font-bold font-mono text-slate-900 dark:text-neutral-100 tabular-nums">
             {metrics.tasksDueToday}
           </div>
-          <div className="mt-1 text-[11px] text-neutral-500 flex items-center justify-between">
+          <div className="mt-1 text-[11px] text-slate-400 dark:text-neutral-500 flex items-center justify-between">
             <span>Target: Oct 14</span>
-            <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-neutral-400" />
+            <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 dark:text-neutral-400" />
           </div>
         </div>
 
         {/* Overdue */}
         <div
           onClick={() => setCurrentPage('tasks')}
-          className="p-4 bg-neutral-900/60 border border-neutral-800 rounded-xl hover:border-neutral-700 transition-colors cursor-pointer group"
+          className="p-4 bg-white border border-slate-200 dark:bg-neutral-900/60 dark:border-neutral-800 rounded-xl hover:border-slate-300 dark:hover:border-neutral-700 transition-colors cursor-pointer group shadow-2xs"
         >
-          <div className="flex items-center justify-between text-xs text-neutral-400">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-neutral-400">
             <span>Overdue Tasks</span>
-            <AlertCircle className={`w-4 h-4 ${metrics.overdueTasks > 0 ? 'text-rose-400' : 'text-neutral-500'}`} />
+            <AlertCircle className={`w-4 h-4 ${metrics.overdueTasks > 0 ? 'text-rose-500 dark:text-rose-400' : 'text-slate-400 dark:text-neutral-500'}`} />
           </div>
-          <div className={`mt-2 text-2xl font-bold font-mono tabular-nums ${metrics.overdueTasks > 0 ? 'text-rose-400' : 'text-neutral-100'}`}>
+          <div className={`mt-2 text-2xl font-bold font-mono tabular-nums ${metrics.overdueTasks > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-neutral-100'}`}>
             {metrics.overdueTasks}
           </div>
-          <div className="mt-1 text-[11px] text-neutral-500 flex items-center justify-between">
+          <div className="mt-1 text-[11px] text-slate-400 dark:text-neutral-500 flex items-center justify-between">
             <span>Requires triage</span>
-            <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-neutral-400" />
+            <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 dark:text-neutral-400" />
           </div>
         </div>
 
         {/* Completed */}
         <div
           onClick={() => setCurrentPage('tasks')}
-          className="p-4 bg-neutral-900/60 border border-neutral-800 rounded-xl hover:border-neutral-700 transition-colors cursor-pointer group"
+          className="p-4 bg-white border border-slate-200 dark:bg-neutral-900/60 dark:border-neutral-800 rounded-xl hover:border-slate-300 dark:hover:border-neutral-700 transition-colors cursor-pointer group shadow-2xs"
         >
-          <div className="flex items-center justify-between text-xs text-neutral-400">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-neutral-400">
             <span>Completed Tasks</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
           </div>
-          <div className="mt-2 text-2xl font-bold font-mono text-neutral-100 tabular-nums">
+          <div className="mt-2 text-2xl font-bold font-mono text-slate-900 dark:text-neutral-100 tabular-nums">
             {metrics.completedTasks}
           </div>
-          <div className="mt-1 text-[11px] text-neutral-500 flex items-center justify-between">
+          <div className="mt-1 text-[11px] text-slate-400 dark:text-neutral-500 flex items-center justify-between">
             <span>Of {metrics.totalTasks} total</span>
-            <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-neutral-400" />
+            <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 dark:text-neutral-400" />
           </div>
         </div>
 
         {/* Overall Completion Rate */}
-        <div className="p-4 bg-neutral-900/60 border border-neutral-800 rounded-xl">
-          <div className="flex items-center justify-between text-xs text-neutral-400">
+        <div className="p-4 bg-white border border-slate-200 dark:bg-neutral-900/60 dark:border-neutral-800 rounded-xl shadow-2xs">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-neutral-400">
             <span>Completion Rate</span>
-            <span className="font-mono text-xs text-indigo-400 tabular-nums font-semibold">
+            <span className="font-mono text-xs text-indigo-600 dark:text-indigo-400 tabular-nums font-semibold">
               {metrics.completionPercentage}%
             </span>
           </div>
-          <div className="mt-2 text-2xl font-bold font-mono text-neutral-100 tabular-nums">
+          <div className="mt-2 text-2xl font-bold font-mono text-slate-900 dark:text-neutral-100 tabular-nums">
             {metrics.completionPercentage}%
           </div>
-          <div className="mt-2 w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+          <div className="mt-2 w-full bg-slate-100 dark:bg-neutral-800 rounded-full h-1.5 overflow-hidden">
             <div
               className="bg-indigo-500 h-full rounded-full transition-all duration-300"
               style={{ width: `${metrics.completionPercentage}%` }}
@@ -233,28 +233,28 @@ export const OverviewView: React.FC = () => {
         {/* Left Column (7 cols): Priorities and Deadlines */}
         <div className="lg:col-span-7 space-y-6">
           {/* Today's Priorities */}
-          <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-4 sm:p-5">
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+          <div className="bg-white border border-slate-200 dark:bg-neutral-900/60 dark:border-neutral-800 rounded-xl p-4 sm:p-5 shadow-2xs">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-neutral-800">
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-neutral-100">
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-neutral-100">
                   Today's Priorities
                 </h2>
-                <span className="text-xs text-neutral-500 font-mono tabular-nums">
+                <span className="text-xs text-slate-400 dark:text-neutral-500 font-mono tabular-nums">
                   ({priorityTasks.length})
                 </span>
               </div>
               <button
                 onClick={() => setCurrentPage('tasks')}
-                className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1"
+                className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 font-medium flex items-center gap-1"
               >
                 <span>View all</span>
                 <ArrowRight className="w-3 h-3" />
               </button>
             </div>
 
-            <div className="mt-3 divide-y divide-neutral-800/60">
+            <div className="mt-3 divide-y divide-slate-100 dark:divide-neutral-800/60">
               {priorityTasks.length === 0 ? (
-                <div className="py-6 text-center text-xs text-neutral-500">
+                <div className="py-6 text-center text-xs text-slate-400 dark:text-neutral-500">
                   No high priority items pending. All urgent goals completed!
                 </div>
               ) : (
@@ -271,20 +271,20 @@ export const OverviewView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => toggleTaskStatus(t.id)}
-                          className="mt-0.5 w-4 h-4 rounded-sm border border-neutral-600 hover:border-indigo-400 hover:bg-indigo-500/10 flex items-center justify-center shrink-0 transition-colors"
+                          className="mt-0.5 w-4 h-4 rounded-sm border border-slate-300 dark:border-neutral-600 hover:border-indigo-500 hover:bg-indigo-50 dark:hover:border-indigo-400 dark:hover:bg-indigo-500/10 flex items-center justify-center shrink-0 transition-colors"
                           title="Mark complete"
                         >
-                          {t.status === 'done' && <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400" />}
+                          {t.status === 'done' && <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />}
                         </button>
                         <div className="min-w-0">
-                          <div className="text-xs font-medium text-neutral-200 group-hover:text-white transition-colors truncate">
+                          <div className="text-xs font-medium text-slate-800 group-hover:text-slate-900 dark:text-neutral-200 dark:group-hover:text-white transition-colors truncate">
                             {t.title}
                           </div>
-                          <div className="mt-1 flex items-center gap-2 text-[11px] text-neutral-400">
+                          <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500 dark:text-neutral-400">
                             {proj && (
                               <span
                                 onClick={() => navigateToProjectDetail(proj.id)}
-                                className="hover:text-neutral-200 cursor-pointer text-indigo-400"
+                                className="hover:text-slate-900 dark:hover:text-neutral-200 cursor-pointer text-indigo-600 dark:text-indigo-400 font-medium"
                               >
                                 {proj.name}
                               </span>
@@ -292,7 +292,7 @@ export const OverviewView: React.FC = () => {
                             {proj && <span aria-hidden="true">·</span>}
                             <span
                               className={`tabular-nums font-mono ${
-                                isOverdue ? 'text-rose-400 font-medium' : 'text-neutral-400'
+                                isOverdue ? 'text-rose-600 dark:text-rose-400 font-medium' : 'text-slate-500 dark:text-neutral-400'
                               }`}
                             >
                               {isOverdue ? `Overdue (${t.dueDate})` : `Due ${t.dueDate}`}
@@ -312,40 +312,40 @@ export const OverviewView: React.FC = () => {
           </div>
 
           {/* Upcoming Deadlines */}
-          <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-4 sm:p-5">
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
-              <h2 className="text-sm font-semibold text-neutral-100">
+          <div className="bg-white border border-slate-200 dark:bg-neutral-900/60 dark:border-neutral-800 rounded-xl p-4 sm:p-5 shadow-2xs">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-neutral-800">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-neutral-100">
                 Upcoming Deadlines
               </h2>
-              <span className="text-xs text-neutral-500 font-mono">Next 5 deliverables</span>
+              <span className="text-xs text-slate-400 dark:text-neutral-500 font-mono">Next 5 deliverables</span>
             </div>
 
             <div className="mt-3 overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="border-b border-neutral-800/80 text-neutral-500 font-medium">
+                  <tr className="border-b border-slate-100 dark:border-neutral-800/80 text-slate-400 dark:text-neutral-500 font-medium">
                     <th className="pb-2 font-normal">Task</th>
                     <th className="pb-2 font-normal">Project</th>
                     <th className="pb-2 font-normal">Due Date</th>
                     <th className="pb-2 font-normal text-right">Priority</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-neutral-800/40">
+                <tbody className="divide-y divide-slate-100 dark:divide-neutral-800/40">
                   {upcomingDeadlines.map((t) => {
                     const proj = projects.find((p) => p.id === t.projectId);
                     const isOverdue = t.dueDate && t.dueDate < todayDateStr;
 
                     return (
-                      <tr key={t.id} className="hover:bg-neutral-850/40 transition-colors">
-                        <td className="py-2.5 pr-2 font-medium text-neutral-200 max-w-xs truncate">
+                      <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-neutral-850/40 transition-colors">
+                        <td className="py-2.5 pr-2 font-medium text-slate-800 dark:text-neutral-200 max-w-xs truncate">
                           {t.title}
                         </td>
-                        <td className="py-2.5 pr-2 text-neutral-400 max-w-[120px] truncate">
+                        <td className="py-2.5 pr-2 text-slate-500 dark:text-neutral-400 max-w-[120px] truncate">
                           {proj ? proj.name : 'Unassigned'}
                         </td>
                         <td
                           className={`py-2.5 pr-2 font-mono tabular-nums ${
-                            isOverdue ? 'text-rose-400 font-medium' : 'text-neutral-400'
+                            isOverdue ? 'text-rose-600 dark:text-rose-400 font-medium' : 'text-slate-500 dark:text-neutral-400'
                           }`}
                         >
                           {t.dueDate}
@@ -365,17 +365,17 @@ export const OverviewView: React.FC = () => {
         {/* Right Column (5 cols): Projects Progress & Activity Feed */}
         <div className="lg:col-span-5 space-y-6">
           {/* Projects Progress */}
-          <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-4 sm:p-5">
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+          <div className="bg-white border border-slate-200 dark:bg-neutral-900/60 dark:border-neutral-800 rounded-xl p-4 sm:p-5 shadow-2xs">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-neutral-800">
               <div className="flex items-center gap-2">
-                <FolderGit2 className="w-4 h-4 text-indigo-400" />
-                <h2 className="text-sm font-semibold text-neutral-100">
+                <FolderGit2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-neutral-100">
                   Projects Progress
                 </h2>
               </div>
               <button
                 onClick={() => setCurrentPage('projects')}
-                className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1"
+                className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 font-medium flex items-center gap-1"
               >
                 <span>All Projects</span>
                 <ArrowRight className="w-3 h-3" />
@@ -393,18 +393,18 @@ export const OverviewView: React.FC = () => {
                   <div
                     key={p.id}
                     onClick={() => navigateToProjectDetail(p.id)}
-                    className="p-2.5 rounded-lg hover:bg-neutral-800/50 cursor-pointer transition-colors group"
+                    className="p-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-neutral-800/50 cursor-pointer transition-colors group"
                   >
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium text-neutral-200 group-hover:text-white truncate">
+                      <span className="font-medium text-slate-800 group-hover:text-slate-900 dark:text-neutral-200 dark:group-hover:text-white truncate">
                         {p.name}
                       </span>
-                      <span className="font-mono text-neutral-400 tabular-nums">
+                      <span className="font-mono text-slate-400 dark:text-neutral-400 tabular-nums">
                         {compTasks}/{projTasks.length} ({pct}%)
                       </span>
                     </div>
 
-                    <div className="mt-2 w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+                    <div className="mt-2 w-full bg-slate-100 dark:bg-neutral-800 rounded-full h-1.5 overflow-hidden">
                       <div
                         className="bg-indigo-500 h-full rounded-full transition-all duration-300"
                         style={{ width: `${pct}%` }}
@@ -417,17 +417,17 @@ export const OverviewView: React.FC = () => {
           </div>
 
           {/* Recent Activity Feed */}
-          <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-4 sm:p-5">
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+          <div className="bg-white border border-slate-200 dark:bg-neutral-900/60 dark:border-neutral-800 rounded-xl p-4 sm:p-5 shadow-2xs">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-neutral-800">
               <div className="flex items-center gap-2">
-                <ActivityIcon className="w-4 h-4 text-neutral-400" />
-                <h2 className="text-sm font-semibold text-neutral-100">
+                <ActivityIcon className="w-4 h-4 text-slate-400 dark:text-neutral-400" />
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-neutral-100">
                   Recent Activity
                 </h2>
               </div>
               <button
                 onClick={() => setCurrentPage('activity')}
-                className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1"
+                className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 font-medium flex items-center gap-1"
               >
                 <span>Timeline</span>
                 <ArrowRight className="w-3 h-3" />
@@ -437,16 +437,16 @@ export const OverviewView: React.FC = () => {
             <div className="mt-3 space-y-3">
               {activities.slice(0, 4).map((act) => (
                 <div key={act.id} className="text-xs">
-                  <div className="flex items-center justify-between text-neutral-200 font-medium">
+                  <div className="flex items-center justify-between text-slate-800 dark:text-neutral-200 font-medium">
                     <span className="truncate">{act.title}</span>
-                    <span className="text-[10px] text-neutral-500 font-mono tabular-nums shrink-0 ml-2">
+                    <span className="text-[10px] text-slate-400 dark:text-neutral-500 font-mono tabular-nums shrink-0 ml-2">
                       {new Date(act.timestamp).toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',
                       })}
                     </span>
                   </div>
-                  <div className="text-[11px] text-neutral-400 line-clamp-1 mt-0.5">
+                  <div className="text-[11px] text-slate-500 dark:text-neutral-400 line-clamp-1 mt-0.5">
                     {act.description}
                   </div>
                 </div>

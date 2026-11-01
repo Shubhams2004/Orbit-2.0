@@ -39,8 +39,10 @@ const WorkspaceShell: React.FC = () => {
   if (currentPage === 'landing') {
     return (
       <div
-        className={`min-h-screen text-neutral-100 ${
-          settings.theme === 'dark' ? 'bg-neutral-950' : 'bg-neutral-50 text-neutral-900'
+        className={`min-h-screen transition-colors duration-200 ${
+          settings.theme === 'dark'
+            ? 'bg-neutral-950 text-neutral-100'
+            : 'bg-slate-50 text-slate-900'
         }`}
       >
         <LandingPageView onEnterDashboard={() => setCurrentPage('overview')} />
@@ -76,8 +78,10 @@ const WorkspaceShell: React.FC = () => {
 
   return (
     <div
-      className={`min-h-screen flex text-neutral-100 ${
-        settings.theme === 'dark' ? 'bg-neutral-950' : 'bg-neutral-50 text-neutral-900'
+      className={`min-h-screen flex transition-colors duration-200 ${
+        settings.theme === 'dark'
+          ? 'bg-neutral-950 text-neutral-100'
+          : 'bg-slate-50 text-slate-900'
       }`}
     >
       {/* Desktop Sidebar */}

@@ -26,6 +26,8 @@ import {
   ArrowUp,
   Copy,
   Check,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
 interface LandingChatMsg {
@@ -55,6 +57,8 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
     metrics,
     tasks,
     projects,
+    settings,
+    updateSettings,
   } = useWorkspace();
 
   // -------------------------------------------------------------
@@ -272,9 +276,9 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
   // 3. Render Landing Page
   // -------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col selection:bg-indigo-500/30 selection:text-indigo-200">
+    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-neutral-950 dark:text-neutral-100 flex flex-col selection:bg-indigo-500/20 selection:text-indigo-600 dark:selection:bg-indigo-500/30 dark:selection:text-indigo-200">
       {/* Top Professional Navigation */}
-      <nav className="h-16 border-b border-neutral-800/80 bg-neutral-950/80 backdrop-blur-md sticky top-0 z-50">
+      <nav className="h-16 border-b border-slate-200/90 bg-white/80 dark:border-neutral-800/80 dark:bg-neutral-950/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
           {/* Brand */}
           <div className="flex items-center gap-3">
@@ -282,43 +286,56 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
               O
             </div>
             <div>
-              <span className="font-semibold text-base tracking-tight text-white">Orbit</span>
-              <span className="ml-1 text-xs font-mono font-medium text-indigo-400">2.0</span>
+              <span className="font-semibold text-base tracking-tight text-slate-900 dark:text-white">Orbit</span>
+              <span className="ml-1 text-xs font-mono font-medium text-indigo-600 dark:text-indigo-400">2.0</span>
             </div>
-            <span className="hidden sm:inline-flex text-[11px] text-neutral-500 font-mono ml-2 border-l border-neutral-800 pl-3">
+            <span className="hidden sm:inline-flex text-[11px] text-slate-500 dark:text-neutral-500 font-mono ml-2 border-l border-slate-200 dark:border-neutral-800 pl-3">
               Edge AI Workspace
             </span>
           </div>
 
           {/* Nav Links */}
-          <div className="hidden md:flex items-center gap-6 text-xs font-medium text-neutral-400">
-            <a href="#ai-chatbot" className="hover:text-white transition-colors">
+          <div className="hidden md:flex items-center gap-6 text-xs font-medium text-slate-600 dark:text-neutral-400">
+            <a href="#ai-chatbot" className="hover:text-slate-900 dark:hover:text-white transition-colors">
               AI Chatbot
             </a>
-            <a href="#smart-planner" className="hover:text-white transition-colors">
+            <a href="#smart-planner" className="hover:text-slate-900 dark:hover:text-white transition-colors">
               Smart Planner
             </a>
-            <a href="#dashboard-preview" className="hover:text-white transition-colors">
+            <a href="#dashboard-preview" className="hover:text-slate-900 dark:hover:text-white transition-colors">
               Dashboard
             </a>
-            <a href="#architecture" className="hover:text-white transition-colors">
+            <a href="#architecture" className="hover:text-slate-900 dark:hover:text-white transition-colors">
               Architecture
             </a>
-            <a href="#pricing" className="hover:text-white transition-colors">
+            <a href="#pricing" className="hover:text-slate-900 dark:hover:text-white transition-colors">
               Plans
             </a>
           </div>
 
-          {/* Action CTAs */}
-          <div className="flex items-center gap-3">
+          {/* Action CTAs & Theme Toggle */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Theme Toggle Button */}
+            <button
+              onClick={() => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' })}
+              className="p-2 text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-neutral-200 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800/80 transition-colors"
+              title={`Switch to ${settings.theme === 'dark' ? 'Light' : 'Dark'} mode`}
+            >
+              {settings.theme === 'dark' ? (
+                <Sun className="w-4 h-4 text-amber-400" />
+              ) : (
+                <Moon className="w-4 h-4 text-slate-700" />
+              )}
+            </button>
+
             {firebaseUser ? (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-neutral-300 hidden sm:inline">
+                <span className="text-xs text-slate-700 dark:text-neutral-300 hidden sm:inline">
                   {firebaseUser.displayName || firebaseUser.email?.split('@')[0]}
                 </span>
                 <button
                   onClick={() => logoutUser()}
-                  className="text-xs text-neutral-400 hover:text-white transition-colors"
+                  className="text-xs text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-white transition-colors"
                 >
                   Sign Out
                 </button>
@@ -326,7 +343,7 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
             ) : (
               <button
                 onClick={() => openAuthModal('login')}
-                className="text-xs font-medium text-neutral-300 hover:text-white px-3 py-1.5 rounded-lg transition-colors"
+                className="text-xs font-medium text-slate-700 hover:text-slate-900 dark:text-neutral-300 dark:hover:text-white px-3 py-1.5 rounded-lg transition-colors"
               >
                 Sign In
               </button>
@@ -345,27 +362,27 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
 
       {/* Hero Section */}
       <section className="pt-12 sm:pt-16 pb-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-900 border border-neutral-800 text-[11px] text-neutral-300 mb-6">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-[11px] text-slate-700 dark:bg-neutral-900 dark:border-neutral-800 dark:text-neutral-300 mb-6 shadow-2xs">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <span>Workers AI Edge Service Operational</span>
-          <span className="text-neutral-600">·</span>
-          <span className="text-indigo-400 font-mono">Llama 3.1 8B Fast</span>
+          <span className="text-slate-400 dark:text-neutral-600">·</span>
+          <span className="text-indigo-600 dark:text-indigo-400 font-mono">Llama 3.1 8B Fast</span>
         </div>
 
-        <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white max-w-4xl mx-auto leading-tight sm:leading-tight">
+        <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 dark:text-white max-w-4xl mx-auto leading-tight sm:leading-tight">
           The Edge-Native AI Workspace for{' '}
-          <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-400 via-violet-300 to-indigo-200">
+          <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-600 via-violet-600 to-indigo-500 dark:from-indigo-400 dark:via-violet-300 dark:to-indigo-200">
             High-Velocity Engineering
           </span>
         </h1>
 
-        <p className="mt-4 sm:mt-6 text-sm sm:text-base text-neutral-400 max-w-2xl mx-auto leading-relaxed">
+        <p className="mt-4 sm:mt-6 text-sm sm:text-base text-slate-600 dark:text-neutral-400 max-w-2xl mx-auto leading-relaxed">
           Unify task triage, project roadmap decomposition, and autonomous AI agents on Cloudflare Workers and D1.
           Experience sub-millisecond edge response, cryptographic security, and uninterrupted developer focus.
         </p>
 
         {/* Unboxed Metadata Stats */}
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-xs text-neutral-400 font-mono">
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-xs text-slate-500 dark:text-neutral-400 font-mono">
           <span>&lt; 50ms Edge Response</span>
           <span aria-hidden="true">·</span>
           <span>Cloudflare D1 ACID Persistence</span>
@@ -385,9 +402,9 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
           </button>
           <a
             href="#ai-chatbot"
-            className="flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-medium text-neutral-300 bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 dark:text-neutral-300 dark:bg-neutral-900 dark:hover:bg-neutral-850 dark:border-neutral-800 rounded-lg transition-colors shadow-2xs"
           >
-            <Bot className="w-4 h-4 text-violet-400" />
+            <Bot className="w-4 h-4 text-violet-600 dark:text-violet-400" />
             <span>Test AI Chatbot Below</span>
           </a>
         </div>
@@ -397,39 +414,39 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
       {/* FIRST AI CHATBOT ON LANDING PAGE (Claude / ChatGPT Aesthetic)          */}
       {/* ---------------------------------------------------------------------- */}
       <section id="ai-chatbot" className="py-8 sm:py-12 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto w-full scroll-mt-20">
-        <div className="bg-[#171717] border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+        <div className="bg-white border border-slate-200 dark:bg-[#171717] dark:border-neutral-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
           {/* Top Bar: Minimalist ChatGPT/Claude style */}
-          <div className="px-5 sm:px-6 py-3.5 bg-[#171717] border-b border-neutral-800/80 flex items-center justify-between">
+          <div className="px-5 sm:px-6 py-3.5 bg-slate-50/90 border-b border-slate-200 dark:bg-[#171717] dark:border-neutral-800/80 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-6 h-6 rounded-full bg-neutral-850 border border-neutral-750 flex items-center justify-center text-violet-400">
+              <div className="w-6 h-6 rounded-full bg-slate-100 border border-slate-200 text-indigo-600 dark:bg-neutral-850 dark:border-neutral-750 dark:text-violet-400 flex items-center justify-center">
                 <Sparkles className="w-3.5 h-3.5" />
               </div>
-              <span className="text-xs sm:text-sm font-semibold text-neutral-100 tracking-tight">Orbit 2.0</span>
-              <span className="text-neutral-600 font-mono">/</span>
-              <span className="text-xs text-neutral-400 hidden sm:inline">Llama 3.1 8B Fast</span>
+              <span className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-neutral-100 tracking-tight">Orbit 2.0</span>
+              <span className="text-slate-400 dark:text-neutral-600 font-mono">/</span>
+              <span className="text-xs text-slate-500 dark:text-neutral-400 hidden sm:inline">Llama 3.1 8B Fast</span>
             </div>
 
-            <div className="flex items-center gap-2 text-xs text-neutral-400 font-mono">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-emerald-400 text-[11px]">Edge Ready</span>
+            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-neutral-400 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-emerald-600 dark:text-emerald-400 text-[11px] font-medium">Edge Ready</span>
             </div>
           </div>
 
           {/* Messages Feed */}
-          <div className="p-4 sm:p-6 space-y-4 min-h-[280px] max-h-[420px] overflow-y-auto bg-[#171717] font-sans text-xs sm:text-sm">
+          <div className="p-4 sm:p-6 space-y-4 min-h-[280px] max-h-[420px] overflow-y-auto bg-slate-50/40 dark:bg-[#171717] font-sans text-xs sm:text-sm">
             {messages.map((m) => (
               <div
                 key={m.id}
                 className={`w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 {m.role === 'user' ? (
-                  <div className="bg-[#2f2f2f] hover:bg-[#343434] text-neutral-100 rounded-3xl rounded-br-md px-4 py-2.5 max-w-[85%] sm:max-w-[75%] leading-relaxed shadow-xs whitespace-pre-wrap select-text">
+                  <div className="bg-slate-200 hover:bg-slate-300/80 text-slate-900 dark:bg-[#2f2f2f] dark:hover:bg-[#343434] dark:text-neutral-100 rounded-3xl rounded-br-md px-4 py-2.5 max-w-[85%] sm:max-w-[75%] leading-relaxed shadow-xs whitespace-pre-wrap select-text">
                     {m.content}
                   </div>
                 ) : (
-                  <div className="flex gap-3 max-w-[90%] leading-relaxed text-neutral-200">
-                    <div className="w-6 h-6 rounded-full bg-neutral-850 border border-neutral-750 text-indigo-300 flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                      <Sparkles className="w-3 h-3 text-violet-400" />
+                  <div className="flex gap-3 max-w-[90%] leading-relaxed text-slate-800 dark:text-neutral-200">
+                    <div className="w-6 h-6 rounded-full bg-slate-100 border border-slate-200 text-indigo-600 dark:bg-neutral-850 dark:border-neutral-750 dark:text-indigo-300 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+                      <Sparkles className="w-3 h-3 text-violet-600 dark:text-violet-400" />
                     </div>
                     <div className="flex-1 space-y-2">
                       <div className="whitespace-pre-wrap select-text">{m.content}</div>
@@ -440,11 +457,11 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
             ))}
 
             {isAiLoading && (
-              <div className="flex gap-3 justify-start items-center text-xs text-neutral-400">
-                <div className="w-6 h-6 rounded-full bg-neutral-850 border border-neutral-750 text-violet-400 flex items-center justify-center shrink-0">
+              <div className="flex gap-3 justify-start items-center text-xs text-slate-500 dark:text-neutral-400">
+                <div className="w-6 h-6 rounded-full bg-slate-100 border border-slate-200 text-violet-600 dark:bg-neutral-850 dark:border-neutral-750 dark:text-violet-400 flex items-center justify-center shrink-0">
                   <RefreshCw className="w-3 h-3 animate-spin" />
                 </div>
-                <div className="text-neutral-400 text-xs">
+                <div className="text-slate-600 dark:text-neutral-400 text-xs">
                   Orbit is thinking...
                 </div>
               </div>
@@ -453,8 +470,8 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
           </div>
 
           {/* Prompt Suggestions */}
-          <div className="px-5 sm:px-6 py-2 bg-[#171717] border-t border-neutral-800/60 flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] text-neutral-500 mr-1">Suggestions:</span>
+          <div className="px-5 sm:px-6 py-2 bg-slate-50 border-t border-slate-200 dark:bg-[#171717] dark:border-neutral-800/60 flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] text-slate-500 dark:text-neutral-500 mr-1">Suggestions:</span>
             {[
               'Plan a 2-week MVP sprint with deliverables',
               'Generate a SOC2 Type II compliance roadmap',
@@ -464,7 +481,7 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
                 key={preset}
                 type="button"
                 onClick={() => sendLandingMessage(preset)}
-                className="px-2.5 py-1 text-[11px] text-neutral-300 bg-neutral-900 hover:bg-neutral-850 hover:text-white border border-neutral-800 rounded-lg transition-colors cursor-pointer"
+                className="px-2.5 py-1 text-[11px] text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 dark:text-neutral-300 dark:bg-neutral-900 dark:hover:bg-neutral-850 dark:hover:text-white dark:border-neutral-800 rounded-lg transition-colors cursor-pointer shadow-2xs"
               >
                 {preset}
               </button>
@@ -472,10 +489,10 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
           </div>
 
           {/* Floating Pill Composer */}
-          <div className="p-4 sm:p-5 bg-[#171717]">
+          <div className="p-4 sm:p-5 bg-slate-50/80 dark:bg-[#171717]">
             <form
               onSubmit={handleFormSubmit}
-              className="bg-[#212121] border border-neutral-750/80 rounded-3xl p-2.5 sm:p-3 shadow-xl focus-within:border-neutral-500 transition-all flex flex-col"
+              className="bg-white border border-slate-300 dark:bg-[#212121] dark:border-neutral-750/80 rounded-3xl p-2.5 sm:p-3 shadow-md focus-within:border-indigo-500 dark:focus-within:border-neutral-500 transition-all flex flex-col"
             >
               <textarea
                 value={inputPrompt}
@@ -489,18 +506,18 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
                 disabled={isAiLoading}
                 placeholder="Ask Orbit AI to plan tasks, evaluate priorities, or solve an engineering bottleneck..."
                 rows={1}
-                className="w-full px-2 py-1 bg-transparent text-xs sm:text-sm text-neutral-100 placeholder-neutral-500 resize-none focus:outline-hidden leading-relaxed"
+                className="w-full px-2 py-1 bg-transparent text-xs sm:text-sm text-slate-900 placeholder-slate-400 dark:text-neutral-100 dark:placeholder-neutral-500 resize-none focus:outline-hidden leading-relaxed"
               />
 
               <div className="mt-2 flex items-center justify-between pt-1">
-                <span className="text-[10px] text-neutral-500 pl-2">Shift + Enter for newline</span>
+                <span className="text-[10px] text-slate-400 dark:text-neutral-500 pl-2">Shift + Enter for newline</span>
                 <button
                   type="submit"
                   disabled={!inputPrompt.trim() || isAiLoading}
                   className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all ${
                     inputPrompt.trim() && !isAiLoading
-                      ? 'bg-white text-black hover:bg-neutral-200 cursor-pointer'
-                      : 'bg-neutral-800 text-neutral-500 cursor-not-allowed opacity-50'
+                      ? 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 cursor-pointer shadow-xs'
+                      : 'bg-slate-100 text-slate-400 dark:bg-neutral-800 dark:text-neutral-500 cursor-not-allowed opacity-50'
                   }`}
                   title="Send message"
                 >
@@ -509,7 +526,7 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
               </div>
             </form>
 
-            <div className="mt-2 text-center text-[10px] text-neutral-500">
+            <div className="mt-2 text-center text-[10px] text-slate-500 dark:text-neutral-500">
               Orbit 2.0 AI Assistant · Powered by Cloudflare Workers AI · Sub-50ms edge inference
             </div>
           </div>
@@ -521,10 +538,10 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
       {/* ---------------------------------------------------------------------- */}
       <section id="smart-planner" className="py-12 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full scroll-mt-20">
         <div className="text-center max-w-3xl mx-auto mb-10">
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
             Plan Professionally with AI Decomposition
           </h2>
-          <p className="mt-2 text-xs sm:text-sm text-neutral-400 leading-relaxed">
+          <p className="mt-2 text-xs sm:text-sm text-slate-600 dark:text-neutral-400 leading-relaxed">
             Select an engineering initiative blueprint or input your customized roadmap.
             Orbit formulates actionable milestones with realistic deadlines and priority weighting.
           </p>
@@ -543,7 +560,7 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
               className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                 selectedPlanKey === tab.key
                   ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800'
+                  : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200 dark:bg-neutral-900 dark:text-neutral-400 dark:hover:text-white dark:border-neutral-800'
               }`}
             >
               {tab.label}
@@ -552,14 +569,14 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
         </div>
 
         {/* Structured Plan Visualizer */}
-        <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-5 sm:p-7 shadow-xl">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-neutral-800">
+        <div className="bg-white border border-slate-200 dark:bg-neutral-900/80 dark:border-neutral-800 rounded-2xl p-5 sm:p-7 shadow-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-slate-200 dark:border-neutral-800">
             <div>
               <div className="flex items-center gap-2">
-                <FolderGit2 className="w-4 h-4 text-indigo-400" />
-                <h3 className="text-base font-semibold text-white">{activePlan.title}</h3>
+                <FolderGit2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <h3 className="text-base font-semibold text-slate-900 dark:text-white">{activePlan.title}</h3>
               </div>
-              <p className="text-xs text-neutral-400 mt-1">{activePlan.subtitle}</p>
+              <p className="text-xs text-slate-500 dark:text-neutral-400 mt-1">{activePlan.subtitle}</p>
             </div>
 
             <button
@@ -591,31 +608,31 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
             {activePlan.tasks.map((task, idx) => (
               <div
                 key={task.title}
-                className="p-4 bg-neutral-950/70 border border-neutral-800/80 rounded-xl hover:border-neutral-700 transition-colors"
+                className="p-4 bg-slate-50/80 border border-slate-200/90 dark:bg-neutral-950/70 dark:border-neutral-800/80 rounded-xl hover:border-slate-300 dark:hover:border-neutral-700 transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <span className="text-xs font-mono text-neutral-500">0{idx + 1}.</span>
+                  <span className="text-xs font-mono text-slate-400 dark:text-neutral-500">0{idx + 1}.</span>
                   <span
                     className={`text-[10px] font-mono px-2 py-0.5 rounded uppercase font-semibold ${
                       task.priority === 'urgent'
-                        ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                        ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
                         : task.priority === 'high'
-                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                        : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                        : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20'
                     }`}
                   >
                     {task.priority}
                   </span>
                 </div>
-                <h4 className="mt-2 text-xs sm:text-sm font-medium text-neutral-200">
+                <h4 className="mt-2 text-xs sm:text-sm font-medium text-slate-900 dark:text-neutral-200">
                   {task.title}
                 </h4>
-                <p className="mt-1 text-xs text-neutral-400 leading-relaxed">
+                <p className="mt-1 text-xs text-slate-600 dark:text-neutral-400 leading-relaxed">
                   {task.description}
                 </p>
-                <div className="mt-3 pt-2.5 border-t border-neutral-800/60 flex items-center justify-between text-[11px] text-neutral-500 font-mono">
+                <div className="mt-3 pt-2.5 border-t border-slate-200 dark:border-neutral-800/60 flex items-center justify-between text-[11px] text-slate-400 dark:text-neutral-500 font-mono">
                   <span>Target Date</span>
-                  <span className="text-neutral-300">{task.dueDate}</span>
+                  <span className="text-slate-700 dark:text-neutral-300">{task.dueDate}</span>
                 </div>
               </div>
             ))}
@@ -628,58 +645,58 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
       {/* ---------------------------------------------------------------------- */}
       <section id="dashboard-preview" className="py-12 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full scroll-mt-20">
         <div className="text-center max-w-3xl mx-auto mb-12">
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
             Unified Executive Dashboard
           </h2>
-          <p className="mt-2 text-xs sm:text-sm text-neutral-400 leading-relaxed">
+          <p className="mt-2 text-xs sm:text-sm text-slate-600 dark:text-neutral-400 leading-relaxed">
             Real-time control over tasks, projects, compliance benchmarks, and agent automations.
           </p>
         </div>
 
         {/* Dashboard Showcase Card */}
-        <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 sm:p-8 shadow-2xl">
+        <div className="bg-white border border-slate-200 dark:bg-neutral-900 dark:border-neutral-800 rounded-2xl p-6 sm:p-8 shadow-2xl">
           {/* Metrics Teaser Bar */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pb-6 border-b border-neutral-800">
-            <div className="p-3.5 bg-neutral-950/60 border border-neutral-800/70 rounded-xl">
-              <span className="text-[11px] text-neutral-400">Total Workload</span>
-              <div className="mt-1 text-xl sm:text-2xl font-bold font-mono text-white tabular-nums">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pb-6 border-b border-slate-200 dark:border-neutral-800">
+            <div className="p-3.5 bg-slate-50 border border-slate-200/90 dark:bg-neutral-950/60 dark:border-neutral-800/70 rounded-xl">
+              <span className="text-[11px] text-slate-500 dark:text-neutral-400">Total Workload</span>
+              <div className="mt-1 text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white tabular-nums">
                 {metrics.totalTasks} Tasks
               </div>
-              <span className="text-[10px] text-emerald-400 mt-0.5 block">State synced</span>
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 block font-medium">State synced</span>
             </div>
 
-            <div className="p-3.5 bg-neutral-950/60 border border-neutral-800/70 rounded-xl">
-              <span className="text-[11px] text-neutral-400">Due Today</span>
-              <div className="mt-1 text-xl sm:text-2xl font-bold font-mono text-sky-400 tabular-nums">
+            <div className="p-3.5 bg-slate-50 border border-slate-200/90 dark:bg-neutral-950/60 dark:border-neutral-800/70 rounded-xl">
+              <span className="text-[11px] text-slate-500 dark:text-neutral-400">Due Today</span>
+              <div className="mt-1 text-xl sm:text-2xl font-bold font-mono text-sky-600 dark:text-sky-400 tabular-nums">
                 {metrics.tasksDueToday} Items
               </div>
-              <span className="text-[10px] text-neutral-500 mt-0.5 block">High urgency triage</span>
+              <span className="text-[10px] text-slate-400 dark:text-neutral-500 mt-0.5 block">High urgency triage</span>
             </div>
 
-            <div className="p-3.5 bg-neutral-950/60 border border-neutral-800/70 rounded-xl">
-              <span className="text-[11px] text-neutral-400">Completed Rate</span>
-              <div className="mt-1 text-xl sm:text-2xl font-bold font-mono text-indigo-400 tabular-nums">
+            <div className="p-3.5 bg-slate-50 border border-slate-200/90 dark:bg-neutral-950/60 dark:border-neutral-800/70 rounded-xl">
+              <span className="text-[11px] text-slate-500 dark:text-neutral-400">Completed Rate</span>
+              <div className="mt-1 text-xl sm:text-2xl font-bold font-mono text-indigo-600 dark:text-indigo-400 tabular-nums">
                 {metrics.completionPercentage}%
               </div>
-              <span className="text-[10px] text-indigo-300 mt-0.5 block">
+              <span className="text-[10px] text-indigo-600 dark:text-indigo-300 mt-0.5 block">
                 {metrics.completedTasks} completed
               </span>
             </div>
 
-            <div className="p-3.5 bg-neutral-950/60 border border-neutral-800/70 rounded-xl">
-              <span className="text-[11px] text-neutral-400">Active Projects</span>
-              <div className="mt-1 text-xl sm:text-2xl font-bold font-mono text-violet-400 tabular-nums">
+            <div className="p-3.5 bg-slate-50 border border-slate-200/90 dark:bg-neutral-950/60 dark:border-neutral-800/70 rounded-xl">
+              <span className="text-[11px] text-slate-500 dark:text-neutral-400">Active Projects</span>
+              <div className="mt-1 text-xl sm:text-2xl font-bold font-mono text-violet-600 dark:text-violet-400 tabular-nums">
                 {projects.length} Portfolios
               </div>
-              <span className="text-[10px] text-neutral-500 mt-0.5 block">Full ownership</span>
+              <span className="text-[10px] text-slate-400 dark:text-neutral-500 mt-0.5 block">Full ownership</span>
             </div>
           </div>
 
           {/* Quick CTA to jump in */}
           <div className="mt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h4 className="text-sm font-semibold text-white">Full-featured engineering workspace</h4>
-              <p className="text-xs text-neutral-400 mt-0.5">
+              <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Full-featured engineering workspace</h4>
+              <p className="text-xs text-slate-500 dark:text-neutral-400 mt-0.5">
                 Switch between Kanban view, task list, project details, and agent audit trails.
               </p>
             </div>
@@ -700,43 +717,43 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
       {/* ---------------------------------------------------------------------- */}
       <section id="architecture" className="py-12 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full scroll-mt-20">
         <div className="text-center max-w-3xl mx-auto mb-12">
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
             Built for Zero-Trust Production Deployments
           </h2>
-          <p className="mt-2 text-xs sm:text-sm text-neutral-400 leading-relaxed">
+          <p className="mt-2 text-xs sm:text-sm text-slate-600 dark:text-neutral-400 leading-relaxed">
             Eliminating sluggish centralized databases and heavy VM orchestration in favor of native Cloudflare edge primitives.
           </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="p-5 bg-neutral-900 border border-neutral-800 rounded-xl">
-            <Cpu className="w-6 h-6 text-indigo-400 mb-3" />
-            <h3 className="text-sm font-semibold text-white">Cloudflare Workers AI</h3>
-            <p className="text-xs text-neutral-400 mt-1.5 leading-relaxed">
+          <div className="p-5 bg-white border border-slate-200 dark:bg-neutral-900 dark:border-neutral-800 rounded-xl shadow-xs">
+            <Cpu className="w-6 h-6 text-indigo-600 dark:text-indigo-400 mb-3" />
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Cloudflare Workers AI</h3>
+            <p className="text-xs text-slate-600 dark:text-neutral-400 mt-1.5 leading-relaxed">
               Native serverless inference with Meta Llama 3.1 8B Instruct Fast. No external API key rate-limits or slow round-trips.
             </p>
           </div>
 
-          <div className="p-5 bg-neutral-900 border border-neutral-800 rounded-xl">
-            <Database className="w-6 h-6 text-sky-400 mb-3" />
-            <h3 className="text-sm font-semibold text-white">Cloudflare D1 Persistence</h3>
-            <p className="text-xs text-neutral-400 mt-1.5 leading-relaxed">
+          <div className="p-5 bg-white border border-slate-200 dark:bg-neutral-900 dark:border-neutral-800 rounded-xl shadow-xs">
+            <Database className="w-6 h-6 text-sky-600 dark:text-sky-400 mb-3" />
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Cloudflare D1 Persistence</h3>
+            <p className="text-xs text-slate-600 dark:text-neutral-400 mt-1.5 leading-relaxed">
               Global SQLite database with ACID compliance, relational integrity, cascade deletes, and low-millisecond queries.
             </p>
           </div>
 
-          <div className="p-5 bg-neutral-900 border border-neutral-800 rounded-xl">
-            <Lock className="w-6 h-6 text-emerald-400 mb-3" />
-            <h3 className="text-sm font-semibold text-white">Cryptographic RS256 Auth</h3>
-            <p className="text-xs text-neutral-400 mt-1.5 leading-relaxed">
+          <div className="p-5 bg-white border border-slate-200 dark:bg-neutral-900 dark:border-neutral-800 rounded-xl shadow-xs">
+            <Lock className="w-6 h-6 text-emerald-600 dark:text-emerald-400 mb-3" />
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Cryptographic RS256 Auth</h3>
+            <p className="text-xs text-slate-600 dark:text-neutral-400 mt-1.5 leading-relaxed">
               Verifies Firebase ID tokens directly against Google public key certs on every edge invocation. Client user IDs are never trusted.
             </p>
           </div>
 
-          <div className="p-5 bg-neutral-900 border border-neutral-800 rounded-xl">
-            <Zap className="w-6 h-6 text-amber-400 mb-3" />
-            <h3 className="text-sm font-semibold text-white">Zero Cold Start</h3>
-            <p className="text-xs text-neutral-400 mt-1.5 leading-relaxed">
+          <div className="p-5 bg-white border border-slate-200 dark:bg-neutral-900 dark:border-neutral-800 rounded-xl shadow-xs">
+            <Zap className="w-6 h-6 text-amber-600 dark:text-amber-400 mb-3" />
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Zero Cold Start</h3>
+            <p className="text-xs text-slate-600 dark:text-neutral-400 mt-1.5 leading-relaxed">
               V8 isolates spin up in under 5ms across 330+ edge locations worldwide with automatic global CDN caching.
             </p>
           </div>
@@ -748,42 +765,42 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
       {/* ---------------------------------------------------------------------- */}
       <section id="pricing" className="py-12 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full scroll-mt-20">
         <div className="text-center max-w-3xl mx-auto mb-12">
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
             Professional Plans for Ambitious Teams
           </h2>
-          <p className="mt-2 text-xs sm:text-sm text-neutral-400 leading-relaxed">
+          <p className="mt-2 text-xs sm:text-sm text-slate-600 dark:text-neutral-400 leading-relaxed">
             Transparent pricing designed for individual contributors and high-velocity engineering organizations.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {/* Starter Plan */}
-          <div className="p-6 bg-neutral-900/80 border border-neutral-800 rounded-2xl flex flex-col justify-between">
+          <div className="p-6 bg-white border border-slate-200 dark:bg-neutral-900/80 dark:border-neutral-800 rounded-2xl flex flex-col justify-between shadow-xs">
             <div>
-              <span className="text-xs font-mono text-neutral-400">Developer</span>
+              <span className="text-xs font-mono text-slate-500 dark:text-neutral-400">Developer</span>
               <div className="mt-2 flex items-baseline gap-1">
-                <span className="text-3xl font-bold text-white">$0</span>
-                <span className="text-xs text-neutral-500">/ forever</span>
+                <span className="text-3xl font-bold text-slate-900 dark:text-white">$0</span>
+                <span className="text-xs text-slate-400 dark:text-neutral-500">/ forever</span>
               </div>
-              <p className="text-xs text-neutral-400 mt-2">
+              <p className="text-xs text-slate-600 dark:text-neutral-400 mt-2">
                 Ideal for solo builders and hobby projects exploring edge AI workflows.
               </p>
 
-              <div className="mt-6 space-y-2.5 text-xs text-neutral-300">
+              <div className="mt-6 space-y-2.5 text-xs text-slate-700 dark:text-neutral-300">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span>Unlimited local tasks & projects</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span>Cloudflare D1 edge database</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span>100 AI chatbot calls / month</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span>Single-user Firebase authentication</span>
                 </div>
               </div>
@@ -791,43 +808,43 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
 
             <button
               onClick={onEnterDashboard}
-              className="mt-8 w-full py-2 text-xs font-medium text-neutral-200 bg-neutral-800 hover:bg-neutral-750 rounded-lg transition-colors"
+              className="mt-8 w-full py-2 text-xs font-medium text-slate-800 bg-slate-100 hover:bg-slate-200 dark:text-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-750 rounded-lg transition-colors cursor-pointer"
             >
               Start Free
             </button>
           </div>
 
           {/* Pro Workspace Plan */}
-          <div className="p-6 bg-neutral-900 border-2 border-indigo-500/80 rounded-2xl flex flex-col justify-between relative shadow-xl shadow-indigo-950/20">
+          <div className="p-6 bg-white border-2 border-indigo-600 dark:bg-neutral-900 dark:border-indigo-500/80 rounded-2xl flex flex-col justify-between relative shadow-xl shadow-indigo-500/10 dark:shadow-indigo-950/20">
             <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-indigo-600 text-[11px] font-semibold text-white tracking-wide uppercase">
               Most Popular
             </div>
 
             <div>
-              <span className="text-xs font-mono text-indigo-400">Pro Workspace</span>
+              <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400">Pro Workspace</span>
               <div className="mt-2 flex items-baseline gap-1">
-                <span className="text-3xl font-bold text-white">$19</span>
-                <span className="text-xs text-neutral-500">/ seat / month</span>
+                <span className="text-3xl font-bold text-slate-900 dark:text-white">$19</span>
+                <span className="text-xs text-slate-400 dark:text-neutral-500">/ seat / month</span>
               </div>
-              <p className="text-xs text-neutral-400 mt-2">
+              <p className="text-xs text-slate-600 dark:text-neutral-400 mt-2">
                 For fast-paced product teams requiring autonomous agent pipelines.
               </p>
 
-              <div className="mt-6 space-y-2.5 text-xs text-neutral-300">
+              <div className="mt-6 space-y-2.5 text-xs text-slate-700 dark:text-neutral-300">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   <span>Unlimited Workers AI chat & agent runs</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   <span>Prioritized Meta Llama 3.1 Fast inference</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   <span>Cross-project dependency tracking</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   <span>30-day activity & compliance audit log</span>
                 </div>
               </div>
@@ -835,39 +852,39 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
 
             <button
               onClick={onEnterDashboard}
-              className="mt-8 w-full py-2 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors shadow-xs"
+              className="mt-8 w-full py-2 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors shadow-xs cursor-pointer"
             >
               Launch Dashboard Pro
             </button>
           </div>
 
           {/* Enterprise Cloud Plan */}
-          <div className="p-6 bg-neutral-900/80 border border-neutral-800 rounded-2xl flex flex-col justify-between">
+          <div className="p-6 bg-white border border-slate-200 dark:bg-neutral-900/80 dark:border-neutral-800 rounded-2xl flex flex-col justify-between shadow-xs">
             <div>
-              <span className="text-xs font-mono text-neutral-400">Enterprise Cloud</span>
+              <span className="text-xs font-mono text-slate-500 dark:text-neutral-400">Enterprise Cloud</span>
               <div className="mt-2 flex items-baseline gap-1">
-                <span className="text-3xl font-bold text-white">Custom</span>
-                <span className="text-xs text-neutral-500">/ annual contract</span>
+                <span className="text-3xl font-bold text-slate-900 dark:text-white">Custom</span>
+                <span className="text-xs text-slate-400 dark:text-neutral-500">/ annual contract</span>
               </div>
-              <p className="text-xs text-neutral-400 mt-2">
+              <p className="text-xs text-slate-600 dark:text-neutral-400 mt-2">
                 Tailored infrastructure for regulated organizations with strict SLAs.
               </p>
 
-              <div className="mt-6 space-y-2.5 text-xs text-neutral-300">
+              <div className="mt-6 space-y-2.5 text-xs text-slate-700 dark:text-neutral-300">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span>Dedicated D1 read replicas & backup</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span>Custom LLM fine-tuning & BYO-model</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span>SOC2 Type II compliance guarantees</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span>Custom SAML SSO & dedicated support</span>
                 </div>
               </div>
@@ -875,7 +892,7 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
 
             <button
               onClick={onEnterDashboard}
-              className="mt-8 w-full py-2 text-xs font-medium text-neutral-200 bg-neutral-800 hover:bg-neutral-750 rounded-lg transition-colors"
+              className="mt-8 w-full py-2 text-xs font-medium text-slate-800 bg-slate-100 hover:bg-slate-200 dark:text-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-750 rounded-lg transition-colors cursor-pointer"
             >
               Contact Sales
             </button>
@@ -885,18 +902,18 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
 
       {/* Final Call to Action */}
       <section className="py-12 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto w-full text-center">
-        <div className="bg-linear-to-b from-neutral-900 to-neutral-950 border border-neutral-800 rounded-3xl p-8 sm:p-12 shadow-2xl">
-          <h2 className="text-2xl sm:text-4xl font-bold text-white tracking-tight">
+        <div className="bg-linear-to-b from-slate-100 to-white border border-slate-200 dark:from-neutral-900 dark:to-neutral-950 dark:border-neutral-800 rounded-3xl p-8 sm:p-12 shadow-2xl">
+          <h2 className="text-2xl sm:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
             Ready to accelerate your product delivery?
           </h2>
-          <p className="mt-3 text-xs sm:text-sm text-neutral-400 max-w-xl mx-auto leading-relaxed">
+          <p className="mt-3 text-xs sm:text-sm text-slate-600 dark:text-neutral-400 max-w-xl mx-auto leading-relaxed">
             Join engineering teams managing roadmaps, edge persistence, and autonomous AI agents in one unified workspace.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <button
               onClick={onEnterDashboard}
-              className="flex items-center gap-2 px-6 py-3 text-xs sm:text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-lg transition-colors"
+              className="flex items-center gap-2 px-6 py-3 text-xs sm:text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-lg transition-colors cursor-pointer"
             >
               <LayoutDashboard className="w-4 h-4" />
               <span>Enter Orbit Dashboard</span>
@@ -907,13 +924,13 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
       </section>
 
       {/* Professional Footer */}
-      <footer className="mt-auto border-t border-neutral-900 bg-neutral-950 py-8 px-4 sm:px-6 lg:px-8 text-neutral-500 text-xs">
+      <footer className="mt-auto border-t border-slate-200 bg-white dark:border-neutral-900 dark:bg-neutral-950 py-8 px-4 sm:px-6 lg:px-8 text-slate-500 dark:text-neutral-500 text-xs">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <div className="w-5 h-5 rounded bg-indigo-600 flex items-center justify-center text-white font-bold text-[10px]">
               O
             </div>
-            <span className="text-neutral-400 font-medium">Orbit 2.0 AI Workspace</span>
+            <span className="text-slate-800 dark:text-neutral-400 font-medium">Orbit 2.0 AI Workspace</span>
             <span aria-hidden="true">·</span>
             <span>Cloudflare Workers & D1</span>
           </div>
@@ -921,22 +938,22 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
           <div className="flex items-center gap-6">
             <button
               onClick={onEnterDashboard}
-              className="hover:text-neutral-300 transition-colors"
+              className="hover:text-slate-900 dark:hover:text-neutral-300 transition-colors"
             >
               Dashboard
             </button>
-            <a href="#ai-chatbot" className="hover:text-neutral-300 transition-colors">
+            <a href="#ai-chatbot" className="hover:text-slate-900 dark:hover:text-neutral-300 transition-colors">
               Chatbot
             </a>
-            <a href="#smart-planner" className="hover:text-neutral-300 transition-colors">
+            <a href="#smart-planner" className="hover:text-slate-900 dark:hover:text-neutral-300 transition-colors">
               Planner
             </a>
-            <a href="#pricing" className="hover:text-neutral-300 transition-colors">
+            <a href="#pricing" className="hover:text-slate-900 dark:hover:text-neutral-300 transition-colors">
               Pricing
             </a>
           </div>
 
-          <div className="text-[11px] text-neutral-600">
+          <div className="text-[11px] text-slate-400 dark:text-neutral-600">
             © 2026 Orbit Systems Inc. All rights reserved.
           </div>
         </div>

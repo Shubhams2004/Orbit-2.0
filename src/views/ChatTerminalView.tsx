@@ -94,7 +94,7 @@ export const ChatTerminalView: React.FC = () => {
   ];
 
   return (
-    <div className="flex h-[calc(100vh-6rem)] rounded-2xl border border-neutral-800/80 bg-neutral-950 overflow-hidden shadow-2xl">
+    <div className="flex h-[calc(100vh-6rem)] rounded-2xl border border-slate-200 dark:border-neutral-800/80 bg-white dark:bg-neutral-950 overflow-hidden shadow-2xl">
       {/* Desktop Conversation History Sidebar */}
       <div className="hidden md:block shrink-0 h-full">
         <ChatSidebar
@@ -138,15 +138,15 @@ export const ChatTerminalView: React.FC = () => {
       )}
 
       {/* Main Chat Canvas (ChatGPT / Claude Style) */}
-      <div className="flex-1 flex flex-col min-w-0 h-full bg-[#171717] relative">
+      <div className="flex-1 flex flex-col min-w-0 h-full bg-slate-50/50 dark:bg-[#171717] relative">
         {/* Top Minimalist Header */}
-        <div className="h-14 px-4 sm:px-6 flex items-center justify-between border-b border-neutral-800/60 bg-[#171717]/90 backdrop-blur-md shrink-0 z-10">
+        <div className="h-14 px-4 sm:px-6 flex items-center justify-between border-b border-slate-200 dark:border-neutral-800/60 bg-white/90 dark:bg-[#171717]/90 backdrop-blur-md shrink-0 z-10">
           <div className="flex items-center gap-2.5 min-w-0">
             {/* Mobile History Toggle */}
             <button
               type="button"
               onClick={() => setIsMobileHistoryOpen(true)}
-              className="md:hidden p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition-colors"
+              className="md:hidden p-1.5 text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors"
               title="Open Conversation History"
             >
               <PanelLeftOpen className="w-4 h-4" />
@@ -158,9 +158,9 @@ export const ChatTerminalView: React.FC = () => {
               onSelectModel={setSelectedModelId}
             />
 
-            <span className="text-neutral-700 hidden sm:inline">/</span>
+            <span className="text-slate-300 dark:text-neutral-700 hidden sm:inline">/</span>
 
-            <span className="text-xs text-neutral-400 truncate hidden sm:inline font-medium max-w-[200px]">
+            <span className="text-xs text-slate-600 dark:text-neutral-400 truncate hidden sm:inline font-medium max-w-[200px]">
               {activeConversation?.title || 'New Chat'}
             </span>
           </div>
@@ -170,13 +170,13 @@ export const ChatTerminalView: React.FC = () => {
             <button
               type="button"
               onClick={handleShare}
-              className="p-1.5 text-neutral-400 hover:text-neutral-200 rounded-lg hover:bg-neutral-800 transition-colors flex items-center gap-1 text-xs"
+              className="p-1.5 text-slate-500 hover:text-slate-800 dark:text-neutral-400 dark:hover:text-neutral-200 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors flex items-center gap-1 text-xs"
               title="Share thread"
             >
               {copiedShare ? (
                 <>
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-emerald-400 text-[11px] hidden sm:inline">Copied</span>
+                  <Check className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+                  <span className="text-emerald-600 dark:text-emerald-400 text-[11px] hidden sm:inline font-medium">Copied</span>
                 </>
               ) : (
                 <>
@@ -191,7 +191,7 @@ export const ChatTerminalView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => handleDeleteConversation(activeConversation.id)}
-                className="p-1.5 text-neutral-400 hover:text-rose-400 rounded-lg hover:bg-neutral-800 transition-colors"
+                className="p-1.5 text-slate-500 hover:text-rose-600 dark:text-neutral-400 dark:hover:text-rose-400 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors"
                 title="Delete this conversation"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -202,7 +202,7 @@ export const ChatTerminalView: React.FC = () => {
             <button
               type="button"
               onClick={() => createNewConversation()}
-              className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition-colors ml-1"
+              className="p-1.5 text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors ml-1"
               title="Start New Chat"
             >
               <Plus className="w-4 h-4" />
@@ -215,14 +215,14 @@ export const ChatTerminalView: React.FC = () => {
           {chatMessages.length === 0 ? (
             /* Claude / ChatGPT Signature Empty State */
             <div className="h-full flex flex-col items-center justify-center text-center max-w-2xl mx-auto py-12 animate-in fade-in">
-              <div className="w-12 h-12 rounded-2xl bg-neutral-900 border border-neutral-750 text-indigo-400 flex items-center justify-center shadow-lg mb-4">
-                <Sparkles className="w-6 h-6 text-violet-400" />
+              <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 text-indigo-600 dark:bg-neutral-900 dark:border-neutral-750 dark:text-indigo-400 flex items-center justify-center shadow-md mb-4">
+                <Sparkles className="w-6 h-6 text-violet-600 dark:text-violet-400" />
               </div>
 
-              <h2 className="text-2xl sm:text-3xl font-semibold text-neutral-100 tracking-tight font-sans">
+              <h2 className="text-2xl sm:text-3xl font-semibold text-slate-900 dark:text-neutral-100 tracking-tight font-sans">
                 Where should we begin?
               </h2>
-              <p className="text-xs sm:text-sm text-neutral-400 mt-2 max-w-md leading-relaxed font-sans">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-neutral-400 mt-2 max-w-md leading-relaxed font-sans">
                 Ask Orbit to structure a project roadmap, triage pending tasks, or brainstorm architecture solutions.
               </p>
 
@@ -235,15 +235,15 @@ export const ChatTerminalView: React.FC = () => {
                       key={item.title}
                       type="button"
                       onClick={() => sendChatMessage(item.title)}
-                      className="p-4 rounded-2xl bg-neutral-900/60 hover:bg-neutral-850 border border-neutral-800 hover:border-neutral-700 text-xs transition-all group cursor-pointer shadow-xs text-left"
+                      className="p-4 rounded-2xl bg-white hover:bg-slate-100/80 border border-slate-200 hover:border-slate-300 dark:bg-neutral-900/60 dark:hover:bg-neutral-850 dark:border-neutral-800 dark:hover:border-neutral-700 text-xs transition-all group cursor-pointer shadow-2xs text-left"
                     >
                       <div className="flex items-center gap-2 mb-1.5">
-                        <Icon className="w-4 h-4 text-indigo-400 group-hover:text-indigo-300 transition-colors" />
-                        <span className="font-semibold text-neutral-200 group-hover:text-white transition-colors">
+                        <Icon className="w-4 h-4 text-indigo-600 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors" />
+                        <span className="font-semibold text-slate-800 group-hover:text-slate-900 dark:text-neutral-200 dark:group-hover:text-white transition-colors">
                           {item.title}
                         </span>
                       </div>
-                      <div className="text-[11px] text-neutral-400 leading-relaxed">
+                      <div className="text-[11px] text-slate-500 dark:text-neutral-400 leading-relaxed">
                         {item.subtitle}
                       </div>
                     </button>
@@ -268,7 +268,7 @@ export const ChatTerminalView: React.FC = () => {
         </div>
 
         {/* Floating Bottom Composer with Gradient Backing */}
-        <div className="p-4 sm:px-6 bg-linear-to-t from-[#171717] via-[#171717]/95 to-transparent shrink-0">
+        <div className="p-4 sm:px-6 bg-linear-to-t from-slate-50 via-slate-50/95 to-transparent dark:from-[#171717] dark:via-[#171717]/95 dark:to-transparent shrink-0">
           <MessageComposer
             onSendMessage={sendChatMessage}
             onStopGeneration={stopChatGeneration}

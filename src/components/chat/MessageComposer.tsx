@@ -102,19 +102,19 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           {attachments.map((att) => (
             <div
               key={att.id}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-neutral-900 border border-neutral-750 text-xs text-neutral-200 shadow-xs"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 dark:bg-neutral-900 dark:border-neutral-750 dark:text-neutral-200 text-xs shadow-xs"
             >
               {att.type === 'code' ? (
-                <FileCode className="w-3.5 h-3.5 text-indigo-400" />
+                <FileCode className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
               ) : (
-                <FileText className="w-3.5 h-3.5 text-sky-400" />
+                <FileText className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
               )}
               <span className="font-medium truncate max-w-[150px]">{att.name}</span>
-              <span className="text-neutral-500 text-[10px]">({att.size})</span>
+              <span className="text-slate-400 dark:text-neutral-500 text-[10px]">({att.size})</span>
               <button
                 type="button"
                 onClick={() => removeAttachment(att.id)}
-                className="p-0.5 text-neutral-400 hover:text-white rounded ml-1"
+                className="p-0.5 text-slate-400 hover:text-slate-700 dark:text-neutral-400 dark:hover:text-white rounded ml-1 cursor-pointer"
                 title="Remove attachment"
               >
                 <X className="w-3 h-3" />
@@ -127,7 +127,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
       {/* Floating ChatGPT / Claude Capsule Composer */}
       <form
         onSubmit={handleSubmit}
-        className="bg-[#212121] border border-neutral-750/80 rounded-3xl p-2.5 sm:p-3 shadow-xl focus-within:border-neutral-500 transition-all flex flex-col"
+        className="bg-white border border-slate-300/90 dark:bg-[#212121] dark:border-neutral-750/80 rounded-3xl p-2.5 sm:p-3 shadow-lg dark:shadow-xl focus-within:border-indigo-500 dark:focus-within:border-neutral-500 transition-all flex flex-col"
       >
         <textarea
           ref={textareaRef}
@@ -137,7 +137,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           disabled={disabled}
           placeholder={isStreaming ? 'Thinking...' : placeholder}
           rows={1}
-          className="w-full px-2 py-1 bg-transparent text-[14px] text-neutral-100 placeholder-neutral-500 resize-none focus:outline-hidden leading-relaxed max-h-52 min-h-[28px]"
+          className="w-full px-2 py-1 bg-transparent text-[14px] text-slate-900 dark:text-neutral-100 placeholder-slate-400 dark:placeholder-neutral-500 resize-none focus:outline-hidden leading-relaxed max-h-52 min-h-[28px]"
         />
 
         {/* Bottom Control Bar */}
@@ -147,7 +147,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="p-1.5 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 rounded-full transition-colors"
+              className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-neutral-400 dark:hover:text-neutral-100 dark:hover:bg-neutral-800 rounded-full transition-colors cursor-pointer"
               title="Attach files or code"
             >
               <Paperclip className="w-4 h-4" />
@@ -160,10 +160,10 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
               <button
                 type="button"
                 onClick={onStopGeneration}
-                className="w-8 h-8 rounded-full bg-white text-black hover:bg-neutral-200 flex items-center justify-center transition-all shadow-xs"
+                className="w-8 h-8 rounded-full bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 flex items-center justify-center transition-all shadow-xs cursor-pointer"
                 title="Stop generating"
               >
-                <Square className="w-3.5 h-3.5 fill-black" />
+                <Square className="w-3.5 h-3.5 fill-white dark:fill-black" />
               </button>
             ) : (
               <button
@@ -171,8 +171,8 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
                 disabled={!hasValidInput || disabled}
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-xs ${
                   hasValidInput && !disabled
-                    ? 'bg-white text-black hover:bg-neutral-200 cursor-pointer'
-                    : 'bg-neutral-800 text-neutral-500 cursor-not-allowed opacity-60'
+                    ? 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 cursor-pointer'
+                    : 'bg-slate-200 text-slate-400 dark:bg-neutral-800 dark:text-neutral-500 cursor-not-allowed opacity-60'
                 }`}
                 title="Send message (Enter)"
               >
@@ -184,7 +184,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
       </form>
 
       {/* ChatGPT / Claude subtle bottom disclaimer */}
-      <div className="mt-2 text-center text-[11px] text-neutral-500 select-none">
+      <div className="mt-2 text-center text-[11px] text-slate-500 dark:text-neutral-500 select-none">
         Orbit can make mistakes. Verify important information.
       </div>
     </div>

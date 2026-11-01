@@ -134,25 +134,25 @@ export const TasksView: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-neutral-800/60">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-200 dark:border-neutral-800/60">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-neutral-100">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-neutral-100">
             My Tasks
           </h1>
-          <p className="text-xs text-neutral-400 mt-0.5">
+          <p className="text-xs text-slate-500 dark:text-neutral-400 mt-0.5">
             Manage your daily workflow, status pipelines, and deliverable commitments.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           {/* View Mode Toggle */}
-          <div className="flex items-center p-1 bg-neutral-900 border border-neutral-800 rounded-lg">
+          <div className="flex items-center p-1 bg-slate-100 border border-slate-200 dark:bg-neutral-900 dark:border-neutral-800 rounded-lg">
             <button
               onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded-md text-xs font-medium transition-colors ${
+              className={`p-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                 viewMode === 'list'
-                  ? 'bg-neutral-800 text-white shadow-xs'
-                  : 'text-neutral-400 hover:text-neutral-200'
+                  ? 'bg-white text-slate-900 font-semibold shadow-xs dark:bg-neutral-800 dark:text-white'
+                  : 'text-slate-500 hover:text-slate-800 dark:text-neutral-400 dark:hover:text-neutral-200'
               }`}
               title="List View"
             >
@@ -160,10 +160,10 @@ export const TasksView: React.FC = () => {
             </button>
             <button
               onClick={() => setViewMode('board')}
-              className={`p-1.5 rounded-md text-xs font-medium transition-colors ${
+              className={`p-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                 viewMode === 'board'
-                  ? 'bg-neutral-800 text-white shadow-xs'
-                  : 'text-neutral-400 hover:text-neutral-200'
+                  ? 'bg-white text-slate-900 font-semibold shadow-xs dark:bg-neutral-800 dark:text-white'
+                  : 'text-slate-500 hover:text-slate-800 dark:text-neutral-400 dark:hover:text-neutral-200'
               }`}
               title="Board View"
             >
@@ -173,7 +173,7 @@ export const TasksView: React.FC = () => {
 
           <button
             onClick={handleCreateTask}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors shadow-xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors shadow-xs cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Add Task</span>
@@ -182,16 +182,16 @@ export const TasksView: React.FC = () => {
       </div>
 
       {/* Filter and Control Bar */}
-      <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div className="bg-white border border-slate-200 dark:bg-neutral-900/60 dark:border-neutral-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs">
         {/* Search */}
         <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-3 top-2.5" />
+          <Search className="w-3.5 h-3.5 text-slate-400 dark:text-neutral-500 absolute left-3 top-2.5" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Filter tasks by keyword..."
-            className="w-full pl-8 pr-3 py-1.5 bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-200 placeholder-neutral-500 focus:outline-hidden focus:border-indigo-500 text-xs"
+            className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 dark:bg-neutral-950 dark:border-neutral-800 rounded-lg text-slate-900 dark:text-neutral-200 placeholder-slate-400 dark:placeholder-neutral-500 focus:outline-hidden focus:border-indigo-500 text-xs"
           />
         </div>
 
@@ -199,11 +199,11 @@ export const TasksView: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2">
           {/* Status filter */}
           <div className="flex items-center gap-1">
-            <span className="text-[11px] text-neutral-500">Status:</span>
+            <span className="text-[11px] text-slate-500 dark:text-neutral-500">Status:</span>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="px-2 py-1 bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-300 text-xs focus:outline-hidden"
+              className="px-2 py-1 bg-slate-50 border border-slate-200 dark:bg-neutral-950 dark:border-neutral-800 rounded-lg text-slate-800 dark:text-neutral-300 text-xs focus:outline-hidden focus:border-indigo-500"
             >
               <option value="all">All</option>
               <option value="todo">To Do</option>
@@ -214,11 +214,11 @@ export const TasksView: React.FC = () => {
 
           {/* Priority filter */}
           <div className="flex items-center gap-1">
-            <span className="text-[11px] text-neutral-500">Priority:</span>
+            <span className="text-[11px] text-slate-500 dark:text-neutral-500">Priority:</span>
             <select
               value={priorityFilter}
               onChange={(e) => setPriorityFilter(e.target.value as any)}
-              className="px-2 py-1 bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-300 text-xs focus:outline-hidden"
+              className="px-2 py-1 bg-slate-50 border border-slate-200 dark:bg-neutral-950 dark:border-neutral-800 rounded-lg text-slate-800 dark:text-neutral-300 text-xs focus:outline-hidden focus:border-indigo-500"
             >
               <option value="all">All</option>
               <option value="urgent">Urgent</option>
@@ -230,11 +230,11 @@ export const TasksView: React.FC = () => {
 
           {/* Project filter */}
           <div className="flex items-center gap-1">
-            <span className="text-[11px] text-neutral-500">Project:</span>
+            <span className="text-[11px] text-slate-500 dark:text-neutral-500">Project:</span>
             <select
               value={projectFilter}
               onChange={(e) => setProjectFilter(e.target.value)}
-              className="px-2 py-1 bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-300 text-xs focus:outline-hidden max-w-[130px] truncate"
+              className="px-2 py-1 bg-slate-50 border border-slate-200 dark:bg-neutral-950 dark:border-neutral-800 rounded-lg text-slate-800 dark:text-neutral-300 text-xs focus:outline-hidden focus:border-indigo-500 max-w-[130px] truncate"
             >
               <option value="all">All Projects</option>
               <option value="unassigned">Unassigned</option>
@@ -247,12 +247,12 @@ export const TasksView: React.FC = () => {
           </div>
 
           {/* Sort By */}
-          <div className="flex items-center gap-1 border-l border-neutral-800 pl-2">
-            <span className="text-[11px] text-neutral-500">Sort:</span>
+          <div className="flex items-center gap-1 border-l border-slate-200 dark:border-neutral-800 pl-2">
+            <span className="text-[11px] text-slate-500 dark:text-neutral-500">Sort:</span>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="px-2 py-1 bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-300 text-xs focus:outline-hidden"
+              className="px-2 py-1 bg-slate-50 border border-slate-200 dark:bg-neutral-950 dark:border-neutral-800 rounded-lg text-slate-800 dark:text-neutral-300 text-xs focus:outline-hidden focus:border-indigo-500"
             >
               <option value="dueDate">Due Date</option>
               <option value="priority">Priority</option>
@@ -260,7 +260,7 @@ export const TasksView: React.FC = () => {
             </select>
             <button
               onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-              className="p-1 text-neutral-400 hover:text-white rounded bg-neutral-950 border border-neutral-800"
+              className="p-1 text-slate-600 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-white rounded bg-slate-50 border border-slate-200 dark:bg-neutral-950 dark:border-neutral-800 cursor-pointer"
               title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
             >
               <ArrowUpDown className="w-3.5 h-3.5" />
@@ -271,7 +271,7 @@ export const TasksView: React.FC = () => {
 
       {/* Main Content: List View OR Board View */}
       {viewMode === 'list' ? (
-        <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl overflow-hidden shadow-xs">
+        <div className="bg-white border border-slate-200 dark:bg-neutral-900/60 dark:border-neutral-800 rounded-xl overflow-hidden shadow-xs">
           {filteredTasks.length === 0 ? (
             <div className="py-12 text-center text-xs text-neutral-500">
               No tasks match your current filter criteria.
@@ -285,7 +285,7 @@ export const TasksView: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="divide-y divide-neutral-800/60">
+            <div className="divide-y divide-slate-100 dark:divide-neutral-800/60">
               {filteredTasks.map((task) => {
                 const isOverdue =
                   task.dueDate && task.dueDate < todayDateStr && task.status !== 'done';
@@ -294,17 +294,17 @@ export const TasksView: React.FC = () => {
                 return (
                   <div
                     key={task.id}
-                    className="p-3.5 hover:bg-neutral-850/50 transition-colors flex items-center justify-between gap-4 group"
+                    className="p-3.5 hover:bg-slate-50/80 dark:hover:bg-neutral-850/50 transition-colors flex items-center justify-between gap-4 group"
                   >
                     {/* Checkbox and Title */}
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <button
                         type="button"
                         onClick={() => toggleTaskStatus(task.id)}
-                        className={`w-4 h-4 rounded-sm border flex items-center justify-center shrink-0 transition-colors ${
+                        className={`w-4 h-4 rounded-sm border flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
                           task.status === 'done'
                             ? 'bg-emerald-600 border-emerald-600 text-white'
-                            : 'border-neutral-600 hover:border-indigo-400'
+                            : 'border-slate-400 hover:border-indigo-600 dark:border-neutral-600 dark:hover:border-indigo-400'
                         }`}
                         title={task.status === 'done' ? 'Mark Incomplete' : 'Mark Complete'}
                       >
@@ -317,8 +317,8 @@ export const TasksView: React.FC = () => {
                             onClick={() => handleEditTask(task)}
                             className={`text-xs font-medium cursor-pointer hover:underline truncate ${
                               task.status === 'done'
-                                ? 'line-through text-neutral-500'
-                                : 'text-neutral-200 group-hover:text-white'
+                                ? 'line-through text-slate-400 dark:text-neutral-500'
+                                : 'text-slate-900 group-hover:text-indigo-600 dark:text-neutral-200 dark:group-hover:text-white'
                             }`}
                           >
                             {task.title}
@@ -326,7 +326,7 @@ export const TasksView: React.FC = () => {
                         </div>
 
                         {task.description && (
-                          <p className="text-[11px] text-neutral-400 line-clamp-1 mt-0.5">
+                          <p className="text-[11px] text-slate-600 dark:text-neutral-400 line-clamp-1 mt-0.5">
                             {task.description}
                           </p>
                         )}
@@ -334,9 +334,9 @@ export const TasksView: React.FC = () => {
                     </div>
 
                     {/* Metadata tags: Project, Due Date, Priority */}
-                    <div className="flex items-center gap-4 shrink-0 text-xs text-neutral-400">
+                    <div className="flex items-center gap-4 shrink-0 text-xs text-slate-500 dark:text-neutral-400">
                       {/* Project info */}
-                      <span className="hidden sm:inline-block text-[11px] max-w-[120px] truncate text-neutral-400">
+                      <span className="hidden sm:inline-block text-[11px] max-w-[120px] truncate text-slate-500 dark:text-neutral-400">
                         {proj ? proj.name : 'Unassigned'}
                       </span>
 
@@ -344,10 +344,10 @@ export const TasksView: React.FC = () => {
                       {task.dueDate && (
                         <div
                           className={`flex items-center gap-1 font-mono text-[11px] tabular-nums ${
-                            isOverdue ? 'text-rose-400 font-semibold' : 'text-neutral-400'
+                            isOverdue ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-slate-500 dark:text-neutral-400'
                           }`}
                         >
-                          {isOverdue && <AlertCircle className="w-3 h-3 text-rose-400 shrink-0" />}
+                          {isOverdue && <AlertCircle className="w-3 h-3 text-rose-500 dark:text-rose-400 shrink-0" />}
                           <span>{isOverdue ? `Overdue ${task.dueDate}` : task.dueDate}</span>
                         </div>
                       )}
@@ -361,14 +361,14 @@ export const TasksView: React.FC = () => {
                           onClick={() =>
                             setActiveMenuTaskId(activeMenuTaskId === task.id ? null : task.id)
                           }
-                          className="p-1 text-neutral-400 hover:text-neutral-200 rounded hover:bg-neutral-800"
+                          className="p-1 text-slate-400 hover:text-slate-700 dark:text-neutral-400 dark:hover:text-neutral-200 rounded hover:bg-slate-100 dark:hover:bg-neutral-800 cursor-pointer"
                         >
                           <MoreVertical className="w-3.5 h-3.5" />
                         </button>
 
                         {activeMenuTaskId === task.id && (
                           <div
-                            className="absolute right-0 mt-1 w-36 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl p-1 z-30"
+                            className="absolute right-0 mt-1 w-36 bg-white border border-slate-200 dark:bg-neutral-900 dark:border-neutral-800 rounded-lg shadow-xl p-1 z-30"
                             onMouseLeave={() => setActiveMenuTaskId(null)}
                           >
                             <button
@@ -376,7 +376,7 @@ export const TasksView: React.FC = () => {
                                 setActiveMenuTaskId(null);
                                 handleEditTask(task);
                               }}
-                              className="w-full text-left px-2.5 py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 rounded flex items-center gap-2"
+                              className="w-full text-left px-2.5 py-1.5 text-xs text-slate-700 hover:text-slate-900 hover:bg-slate-100 dark:text-neutral-300 dark:hover:text-white dark:hover:bg-neutral-800 rounded flex items-center gap-2 cursor-pointer"
                             >
                               <Edit2 className="w-3 h-3" />
                               <span>Edit Task</span>
@@ -386,7 +386,7 @@ export const TasksView: React.FC = () => {
                                 setActiveMenuTaskId(null);
                                 handleDeleteTask(task);
                               }}
-                              className="w-full text-left px-2.5 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 rounded flex items-center gap-2"
+                              className="w-full text-left px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10 rounded flex items-center gap-2 cursor-pointer"
                             >
                               <Trash2 className="w-3 h-3" />
                               <span>Delete</span>
@@ -416,14 +416,14 @@ export const TasksView: React.FC = () => {
             return (
               <div
                 key={colStatus}
-                className="bg-neutral-900/50 border border-neutral-800 rounded-xl p-3 flex flex-col min-h-[450px]"
+                className="bg-slate-100/70 border border-slate-200 dark:bg-neutral-900/50 dark:border-neutral-800 rounded-xl p-3 flex flex-col min-h-[450px]"
               >
-                <div className="flex items-center justify-between pb-2.5 border-b border-neutral-800/80 mb-3">
+                <div className="flex items-center justify-between pb-2.5 border-b border-slate-200 dark:border-neutral-800/80 mb-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-neutral-200">
+                    <span className="text-xs font-semibold text-slate-900 dark:text-neutral-200">
                       {colTitle}
                     </span>
-                    <span className="text-[11px] font-mono text-neutral-500 tabular-nums">
+                    <span className="text-[11px] font-mono text-slate-500 dark:text-neutral-500 tabular-nums">
                       ({columnTasks.length})
                     </span>
                   </div>
@@ -432,7 +432,7 @@ export const TasksView: React.FC = () => {
                       setTaskToEdit(null);
                       setIsTaskModalOpen(true);
                     }}
-                    className="p-1 text-neutral-400 hover:text-white rounded hover:bg-neutral-800"
+                    className="p-1 text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-white rounded hover:bg-slate-200 dark:hover:bg-neutral-800 cursor-pointer"
                     title="Add task to this column"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -441,7 +441,7 @@ export const TasksView: React.FC = () => {
 
                 <div className="space-y-2.5 flex-1 overflow-y-auto">
                   {columnTasks.length === 0 ? (
-                    <div className="h-32 flex items-center justify-center text-xs text-neutral-500 border border-dashed border-neutral-800/80 rounded-lg">
+                    <div className="h-32 flex items-center justify-center text-xs text-slate-400 dark:text-neutral-500 border border-dashed border-slate-300 dark:border-neutral-800/80 rounded-lg">
                       No tasks in {colTitle}
                     </div>
                   ) : (
@@ -453,12 +453,12 @@ export const TasksView: React.FC = () => {
                       return (
                         <div
                           key={task.id}
-                          className="p-3 bg-neutral-950/80 border border-neutral-800/90 rounded-lg hover:border-neutral-700 transition-colors shadow-2xs group"
+                          className="p-3 bg-white border border-slate-200/90 rounded-lg hover:border-slate-300 hover:shadow-xs transition-colors shadow-2xs group dark:bg-neutral-950/80 dark:border-neutral-800/90 dark:hover:border-neutral-700"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <span
                               onClick={() => handleEditTask(task)}
-                              className="text-xs font-medium text-neutral-200 hover:text-white cursor-pointer line-clamp-2"
+                              className="text-xs font-medium text-slate-900 hover:text-indigo-600 dark:text-neutral-200 dark:hover:text-white cursor-pointer line-clamp-2"
                             >
                               {task.title}
                             </span>
@@ -469,14 +469,14 @@ export const TasksView: React.FC = () => {
                                     activeMenuTaskId === task.id ? null : task.id
                                   )
                                 }
-                                className="p-1 text-neutral-500 hover:text-neutral-300 rounded"
+                                className="p-1 text-slate-400 hover:text-slate-700 dark:text-neutral-500 dark:hover:text-neutral-300 rounded cursor-pointer"
                               >
                                 <MoreVertical className="w-3 h-3" />
                               </button>
 
                               {activeMenuTaskId === task.id && (
                                 <div
-                                  className="absolute right-0 mt-1 w-32 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl p-1 z-30"
+                                  className="absolute right-0 mt-1 w-32 bg-white border border-slate-200 dark:bg-neutral-900 dark:border-neutral-800 rounded-lg shadow-xl p-1 z-30"
                                   onMouseLeave={() => setActiveMenuTaskId(null)}
                                 >
                                   <button
@@ -484,7 +484,7 @@ export const TasksView: React.FC = () => {
                                       setActiveMenuTaskId(null);
                                       handleEditTask(task);
                                     }}
-                                    className="w-full text-left px-2 py-1 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 rounded"
+                                    className="w-full text-left px-2 py-1 text-xs text-slate-700 hover:text-slate-900 hover:bg-slate-100 dark:text-neutral-300 dark:hover:text-white dark:hover:bg-neutral-800 rounded cursor-pointer"
                                   >
                                     Edit
                                   </button>
@@ -493,7 +493,7 @@ export const TasksView: React.FC = () => {
                                       setActiveMenuTaskId(null);
                                       handleDeleteTask(task);
                                     }}
-                                    className="w-full text-left px-2 py-1 text-xs text-rose-400 hover:bg-rose-500/10 rounded"
+                                    className="w-full text-left px-2 py-1 text-xs text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10 rounded cursor-pointer"
                                   >
                                     Delete
                                   </button>
@@ -503,12 +503,12 @@ export const TasksView: React.FC = () => {
                           </div>
 
                           {task.description && (
-                            <p className="text-[11px] text-neutral-400 line-clamp-2 mt-1">
+                            <p className="text-[11px] text-slate-600 dark:text-neutral-400 line-clamp-2 mt-1">
                               {task.description}
                             </p>
                           )}
 
-                          <div className="mt-3 pt-2 border-t border-neutral-850 flex items-center justify-between text-[11px] text-neutral-400">
+                          <div className="mt-3 pt-2 border-t border-slate-100 dark:border-neutral-850 flex items-center justify-between text-[11px] text-slate-500 dark:text-neutral-400">
                             <span className="truncate max-w-[90px]">
                               {proj ? proj.name : 'Unassigned'}
                             </span>
@@ -516,7 +516,7 @@ export const TasksView: React.FC = () => {
                               {task.dueDate && (
                                 <span
                                   className={`font-mono tabular-nums ${
-                                    isOverdue ? 'text-rose-400 font-semibold' : ''
+                                    isOverdue ? 'text-rose-600 dark:text-rose-400 font-semibold' : ''
                                   }`}
                                 >
                                   {task.dueDate.slice(5)}
@@ -527,13 +527,13 @@ export const TasksView: React.FC = () => {
                           </div>
 
                           {/* Quick Column State mover */}
-                          <div className="mt-2 pt-1 flex items-center justify-between text-[10px] text-neutral-500">
+                          <div className="mt-2 pt-1 flex items-center justify-between text-[10px] text-slate-500 dark:text-neutral-500">
                             <span>Move to:</span>
                             <div className="flex items-center gap-1">
                               {colStatus !== 'todo' && (
                                 <button
                                   onClick={() => updateTask(task.id, { status: 'todo' })}
-                                  className="px-1.5 py-0.5 hover:text-neutral-300 hover:bg-neutral-800 rounded"
+                                  className="px-1.5 py-0.5 hover:text-slate-900 hover:bg-slate-100 dark:hover:text-neutral-300 dark:hover:bg-neutral-800 rounded cursor-pointer"
                                 >
                                   To Do
                                 </button>
@@ -541,7 +541,7 @@ export const TasksView: React.FC = () => {
                               {colStatus !== 'in_progress' && (
                                 <button
                                   onClick={() => updateTask(task.id, { status: 'in_progress' })}
-                                  className="px-1.5 py-0.5 hover:text-neutral-300 hover:bg-neutral-800 rounded"
+                                  className="px-1.5 py-0.5 hover:text-slate-900 hover:bg-slate-100 dark:hover:text-neutral-300 dark:hover:bg-neutral-800 rounded cursor-pointer"
                                 >
                                   Progress
                                 </button>
@@ -549,7 +549,7 @@ export const TasksView: React.FC = () => {
                               {colStatus !== 'done' && (
                                 <button
                                   onClick={() => updateTask(task.id, { status: 'done' })}
-                                  className="px-1.5 py-0.5 hover:text-emerald-400 hover:bg-neutral-800 rounded"
+                                  className="px-1.5 py-0.5 text-emerald-600 hover:bg-emerald-50 dark:hover:text-emerald-400 dark:hover:bg-neutral-800 rounded cursor-pointer"
                                 >
                                   Done
                                 </button>

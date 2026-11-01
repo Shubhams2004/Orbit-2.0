@@ -68,12 +68,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       className={`h-full flex flex-col justify-between border-r transition-all duration-200 select-none ${
         settings.theme === 'dark'
           ? 'bg-neutral-950 border-neutral-800/80 text-neutral-300'
-          : 'bg-white border-neutral-200 text-neutral-700'
+          : 'bg-white border-slate-200 text-slate-700'
       } ${isCollapsed ? 'w-18' : 'w-64'}`}
     >
       {/* Brand Header */}
       <div>
-        <div className="h-14 px-4 flex items-center justify-between border-b border-neutral-800/60">
+        <div className="h-14 px-4 flex items-center justify-between border-b border-slate-200 dark:border-neutral-800/60">
           <div
             onClick={() => handleNavClick('overview')}
             className="flex items-center gap-3 cursor-pointer overflow-hidden"
@@ -83,10 +83,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             {!isCollapsed && (
               <div className="truncate">
-                <span className="font-semibold text-sm tracking-tight text-neutral-100 dark:text-neutral-100 light:text-neutral-900">
+                <span className="font-semibold text-sm tracking-tight text-slate-900 dark:text-neutral-100">
                   Orbit
                 </span>
-                <span className="ml-1 text-[11px] font-mono font-medium text-indigo-400">
+                <span className="ml-1 text-[11px] font-mono font-medium text-indigo-600 dark:text-indigo-400">
                   2.0
                 </span>
               </div>
@@ -95,7 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="hidden md:flex p-1.5 text-neutral-400 hover:text-neutral-200 rounded-lg hover:bg-neutral-800/60 transition-colors"
+            className="hidden md:flex p-1.5 text-slate-400 hover:text-slate-700 dark:text-neutral-400 dark:hover:text-neutral-200 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800/60 transition-colors"
             title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {isCollapsed ? (
@@ -134,22 +134,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => handleNavClick(item.id)}
                 className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-lg transition-colors ${
                   isActive
-                    ? 'bg-neutral-800/80 text-white font-semibold'
-                    : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/60'
+                    ? 'bg-indigo-50 text-indigo-700 font-semibold dark:bg-neutral-800/80 dark:text-white'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-neutral-400 dark:hover:text-neutral-200 dark:hover:bg-neutral-900/60'
                 }`}
                 title={item.label}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <Icon
                     className={`w-4 h-4 shrink-0 ${
-                      isActive ? 'text-indigo-400' : 'text-neutral-400'
+                      isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-neutral-400'
                     }`}
                   />
                   {!isCollapsed && <span className="truncate">{item.label}</span>}
                 </div>
 
                 {!isCollapsed && item.count !== undefined && item.count > 0 && (
-                  <span className="text-[11px] font-mono text-neutral-400 tabular-nums">
+                  <span className="text-[11px] font-mono text-slate-400 dark:text-neutral-400 tabular-nums">
                     {item.count}
                   </span>
                 )}
@@ -160,10 +160,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* User Profile Card */}
-      <div className="p-3 border-t border-neutral-800/60 relative">
+      <div className="p-3 border-t border-slate-200 dark:border-neutral-800/60 relative">
         <div
           onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-          className={`flex items-center gap-3 p-1.5 rounded-lg hover:bg-neutral-800/60 cursor-pointer transition-colors ${
+          className={`flex items-center gap-3 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800/60 cursor-pointer transition-colors ${
             isCollapsed ? 'justify-center' : ''
           }`}
         >
@@ -171,14 +171,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             src={user.avatarUrl}
             alt={user.name}
             referrerPolicy="no-referrer"
-            className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-neutral-700"
+            className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-slate-300 dark:ring-neutral-700"
           />
           {!isCollapsed && (
             <div className="min-w-0 flex-1 truncate text-left">
-              <div className="text-xs font-medium text-neutral-200 truncate">
+              <div className="text-xs font-medium text-slate-800 dark:text-neutral-200 truncate">
                 {user.name}
               </div>
-              <div className="text-[11px] text-neutral-400 truncate">
+              <div className="text-[11px] text-slate-500 dark:text-neutral-400 truncate">
                 {user.role}
               </div>
             </div>
@@ -188,39 +188,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* User Popover Menu */}
         {isUserMenuOpen && (
           <div
-            className="absolute bottom-16 left-3 w-56 bg-neutral-900 border border-neutral-800 rounded-xl shadow-xl p-2 text-xs text-neutral-200 z-50 animate-in fade-in zoom-in-95"
+            className="absolute bottom-16 left-3 w-56 bg-white border border-slate-200 dark:bg-neutral-900 dark:border-neutral-800 rounded-xl shadow-xl p-2 text-xs text-slate-800 dark:text-neutral-200 z-50 animate-in fade-in zoom-in-95"
             onMouseLeave={() => setIsUserMenuOpen(false)}
           >
-            <div className="px-2.5 py-1.5 border-b border-neutral-800 text-[11px] text-neutral-400">
-              Signed in as <span className="text-neutral-200 font-medium">{user.email}</span>
+            <div className="px-2.5 py-1.5 border-b border-slate-200 dark:border-neutral-800 text-[11px] text-slate-500 dark:text-neutral-400">
+              Signed in as <span className="text-slate-800 dark:text-neutral-200 font-medium">{user.email}</span>
             </div>
             <button
               onClick={() => {
                 setIsUserMenuOpen(false);
                 handleNavClick('settings');
               }}
-              className="w-full text-left px-2.5 py-2 mt-1 rounded-lg hover:bg-neutral-800 text-neutral-300 hover:text-white flex items-center justify-between"
+              className="w-full text-left px-2.5 py-2 mt-1 rounded-lg hover:bg-slate-100 text-slate-700 hover:text-slate-900 dark:hover:bg-neutral-800 dark:text-neutral-300 dark:hover:text-white flex items-center justify-between"
             >
               <span>Preferences</span>
-              <Settings className="w-3.5 h-3.5 text-neutral-400" />
+              <Settings className="w-3.5 h-3.5 text-slate-400 dark:text-neutral-400" />
             </button>
             <a
               href="https://workers.cloudflare.com"
               target="_blank"
               rel="noreferrer"
-              className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-neutral-800 text-neutral-300 hover:text-white flex items-center justify-between"
+              className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-slate-100 text-slate-700 hover:text-slate-900 dark:hover:bg-neutral-800 dark:text-neutral-300 dark:hover:text-white flex items-center justify-between"
             >
               <span>Cloudflare Architecture</span>
-              <ExternalLink className="w-3.5 h-3.5 text-neutral-400" />
+              <ExternalLink className="w-3.5 h-3.5 text-slate-400 dark:text-neutral-400" />
             </a>
-            <div className="my-1 border-t border-neutral-800" />
+            <div className="my-1 border-t border-slate-200 dark:border-neutral-800" />
             {firebaseUser ? (
               <button
                 onClick={() => {
                   setIsUserMenuOpen(false);
                   logoutUser();
                 }}
-                className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-rose-500/10 text-rose-400 hover:text-rose-300 flex items-center justify-between transition-colors"
+                className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-rose-50 text-rose-600 hover:text-rose-700 dark:hover:bg-rose-500/10 dark:text-rose-400 dark:hover:text-rose-300 flex items-center justify-between transition-colors"
               >
                 <span>Sign Out</span>
                 <LogOut className="w-3.5 h-3.5" />
@@ -231,7 +231,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   setIsUserMenuOpen(false);
                   openAuthModal('login');
                 }}
-                className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-neutral-800 text-indigo-400 hover:text-indigo-300 flex items-center justify-between transition-colors"
+                className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-slate-100 text-indigo-600 hover:text-indigo-700 dark:hover:bg-neutral-800 dark:text-indigo-400 dark:hover:text-indigo-300 flex items-center justify-between transition-colors"
               >
                 <span>Sign In / Register</span>
                 <LogOut className="w-3.5 h-3.5 rotate-180" />

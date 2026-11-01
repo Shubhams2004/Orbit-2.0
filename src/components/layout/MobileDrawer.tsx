@@ -53,18 +53,18 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({ isOpen, onClose }) =
       />
 
       {/* Drawer content */}
-      <div className="relative w-72 max-w-[80vw] bg-neutral-900 border-r border-neutral-800 h-full p-4 flex flex-col justify-between text-neutral-200 z-10 shadow-2xl">
+      <div className="relative w-72 max-w-[80vw] bg-white border-r border-slate-200 dark:bg-neutral-900 dark:border-neutral-800 h-full p-4 flex flex-col justify-between text-slate-800 dark:text-neutral-200 z-10 shadow-2xl">
         <div>
-          <div className="flex items-center justify-between pb-4 border-b border-neutral-800">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-neutral-800">
             <div className="flex items-center gap-2.5">
               <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-xs">
                 O
               </div>
-              <span className="font-semibold text-sm text-neutral-100">Orbit 2.0</span>
+              <span className="font-semibold text-sm text-slate-900 dark:text-neutral-100">Orbit 2.0</span>
             </div>
             <button
               onClick={onClose}
-              className="p-1 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800"
+              className="p-1 text-slate-400 hover:text-slate-700 dark:text-neutral-400 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800"
             >
               <X className="w-5 h-5" />
             </button>
@@ -96,16 +96,16 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({ isOpen, onClose }) =
                   onClick={() => handleNav(item.id)}
                   className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium rounded-lg transition-colors ${
                     isActive
-                      ? 'bg-neutral-800 text-white font-semibold'
-                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-850'
+                      ? 'bg-indigo-50 text-indigo-700 font-semibold dark:bg-neutral-800 dark:text-white'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-neutral-400 dark:hover:text-neutral-200 dark:hover:bg-neutral-850'
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <Icon className="w-4 h-4 text-neutral-400" />
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-neutral-400'}`} />
                     <span>{item.label}</span>
                   </div>
                   {item.count !== undefined && item.count > 0 && (
-                    <span className="text-[11px] font-mono text-neutral-500 tabular-nums">
+                    <span className="text-[11px] font-mono text-slate-400 dark:text-neutral-500 tabular-nums">
                       {item.count}
                     </span>
                   )}
@@ -116,16 +116,16 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({ isOpen, onClose }) =
         </div>
 
         {/* User footer */}
-        <div className="pt-4 border-t border-neutral-800 flex items-center gap-3">
+        <div className="pt-4 border-t border-slate-200 dark:border-neutral-800 flex items-center gap-3">
           <img
             src={user.avatarUrl}
             alt={user.name}
             referrerPolicy="no-referrer"
-            className="w-8 h-8 rounded-full object-cover ring-1 ring-neutral-700"
+            className="w-8 h-8 rounded-full object-cover ring-1 ring-slate-300 dark:ring-neutral-700"
           />
           <div className="min-w-0 flex-1 truncate">
-            <div className="text-xs font-medium text-neutral-200 truncate">{user.name}</div>
-            <div className="text-[11px] text-neutral-500 truncate">{user.email}</div>
+            <div className="text-xs font-medium text-slate-800 dark:text-neutral-200 truncate">{user.name}</div>
+            <div className="text-[11px] text-slate-500 dark:text-neutral-500 truncate">{user.email}</div>
           </div>
         </div>
       </div>

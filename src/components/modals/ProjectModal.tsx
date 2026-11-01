@@ -82,22 +82,22 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
       <div
-        className="w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-xl shadow-2xl p-6 text-neutral-100 animate-in fade-in zoom-in-95 duration-150"
+        className="w-full max-w-lg bg-white border border-slate-200 text-slate-900 dark:bg-neutral-900 dark:border-neutral-800 dark:text-neutral-100 rounded-xl shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-150"
         role="dialog"
         aria-modal="true"
       >
-        <div className="flex items-center justify-between pb-4 border-b border-neutral-800">
+        <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-neutral-800">
           <div>
-            <h3 className="text-base font-semibold text-neutral-100">
+            <h3 className="text-base font-semibold text-slate-900 dark:text-neutral-100">
               {projectToEdit ? 'Edit Project' : 'New Project'}
             </h3>
-            <p className="text-xs text-neutral-400 mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-neutral-400 mt-0.5">
               {projectToEdit ? `ID: ${projectToEdit.id}` : 'Group tasks into a strategic milestone'}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-neutral-400 hover:text-neutral-200 rounded-lg hover:bg-neutral-800 transition-colors"
+            className="p-1 text-slate-400 hover:text-slate-600 dark:text-neutral-400 dark:hover:text-neutral-200 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -105,14 +105,14 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           {error && (
-            <div className="flex items-center gap-2 p-3 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg">
+            <div className="flex items-center gap-2 p-3 text-xs text-rose-600 bg-rose-50 border border-rose-200 dark:text-rose-400 dark:bg-rose-500/10 dark:border-rose-500/20 rounded-lg">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+            <label className="block text-xs font-medium text-slate-700 dark:text-neutral-300 mb-1.5">
               Project Name <span className="text-rose-500">*</span>
             </label>
             <input
@@ -124,12 +124,12 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
               }}
               placeholder="e.g. Platform 2.0 Architecture"
               autoFocus
-              className="w-full px-3.5 py-2 text-sm bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-100 placeholder-neutral-500 focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 dark:bg-neutral-950 dark:border-neutral-800 rounded-lg text-slate-900 dark:text-neutral-100 placeholder-slate-400 dark:placeholder-neutral-500 focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+            <label className="block text-xs font-medium text-slate-700 dark:text-neutral-300 mb-1.5">
               Description
             </label>
             <textarea
@@ -137,19 +137,19 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Key objectives, scope, or delivery timeline..."
               rows={3}
-              className="w-full px-3.5 py-2 text-sm bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-100 placeholder-neutral-500 focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors resize-none"
+              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 dark:bg-neutral-950 dark:border-neutral-800 rounded-lg text-slate-900 dark:text-neutral-100 placeholder-slate-400 dark:placeholder-neutral-500 focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors resize-none"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+              <label className="block text-xs font-medium text-slate-700 dark:text-neutral-300 mb-1.5">
                 Status
               </label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as ProjectStatus)}
-                className="w-full px-3 py-2 text-xs bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-200 focus:outline-hidden focus:border-indigo-500"
+                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 dark:bg-neutral-950 dark:border-neutral-800 rounded-lg text-slate-900 dark:text-neutral-200 focus:outline-hidden focus:border-indigo-500"
               >
                 <option value="active">Active</option>
                 <option value="in_progress">In Progress</option>
@@ -159,13 +159,13 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+              <label className="block text-xs font-medium text-slate-700 dark:text-neutral-300 mb-1.5">
                 Priority
               </label>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                className="w-full px-3 py-2 text-xs bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-200 focus:outline-hidden focus:border-indigo-500"
+                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 dark:bg-neutral-950 dark:border-neutral-800 rounded-lg text-slate-900 dark:text-neutral-200 focus:outline-hidden focus:border-indigo-500"
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
@@ -176,7 +176,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+            <label className="block text-xs font-medium text-slate-700 dark:text-neutral-300 mb-1.5">
               Color Accent
             </label>
             <div className="flex items-center gap-2">
@@ -185,8 +185,8 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
                   key={c.id}
                   type="button"
                   onClick={() => setColor(c.id)}
-                  className={`w-6 h-6 rounded-full ${c.bg} transition-all ${
-                    color === c.id ? 'ring-2 ring-white ring-offset-2 ring-offset-neutral-900 scale-110' : 'opacity-70 hover:opacity-100'
+                  className={`w-6 h-6 rounded-full ${c.bg} transition-all cursor-pointer ${
+                    color === c.id ? 'ring-2 ring-indigo-500 dark:ring-white ring-offset-2 ring-offset-white dark:ring-offset-neutral-900 scale-110' : 'opacity-70 hover:opacity-100'
                   }`}
                   title={c.label}
                 />
@@ -194,17 +194,17 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
             </div>
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-3 border-t border-neutral-800">
+          <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-200 dark:border-neutral-800">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-medium text-neutral-300 hover:text-white bg-neutral-800/80 hover:bg-neutral-800 rounded-lg transition-colors"
+              className="px-4 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 dark:text-neutral-300 dark:hover:text-white dark:bg-neutral-800/80 dark:hover:bg-neutral-800 rounded-lg transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors"
+              className="px-4 py-2 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors cursor-pointer shadow-xs"
             >
               {projectToEdit ? 'Save Changes' : 'Create Project'}
             </button>

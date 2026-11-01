@@ -82,10 +82,10 @@ export const ProjectDetailView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Top Navigation */}
-      <div className="flex items-center justify-between pb-3 border-b border-neutral-800/60">
+      <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-neutral-800/60">
         <button
           onClick={() => setCurrentPage('projects')}
-          className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-neutral-100 transition-colors"
+          className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-neutral-100 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Back to Projects</span>
@@ -94,14 +94,14 @@ export const ProjectDetailView: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setIsProjectModalOpen(true)}
-            className="flex items-center gap-1 px-2.5 py-1 text-xs text-neutral-300 hover:text-white bg-neutral-900 border border-neutral-800 rounded-lg hover:bg-neutral-850"
+            className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 dark:text-neutral-300 dark:hover:text-white dark:bg-neutral-900 dark:border-neutral-800 dark:hover:bg-neutral-850 rounded-lg shadow-xs transition-colors"
           >
             <Edit2 className="w-3.5 h-3.5" />
             <span>Edit Project</span>
           </button>
           <button
             onClick={handleDeleteProject}
-            className="flex items-center gap-1 px-2.5 py-1 text-xs text-rose-400 hover:text-rose-300 bg-neutral-900 border border-neutral-800 rounded-lg hover:bg-rose-500/10"
+            className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100/80 border border-rose-200 dark:text-rose-400 dark:hover:text-rose-300 dark:bg-neutral-900 dark:border-neutral-800 dark:hover:bg-rose-500/10 rounded-lg shadow-xs transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
             <span>Delete</span>
@@ -110,16 +110,16 @@ export const ProjectDetailView: React.FC = () => {
       </div>
 
       {/* Project Meta Card */}
-      <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-5 shadow-xs">
+      <div className="bg-white border border-slate-200 text-slate-900 dark:bg-neutral-900/60 dark:border-neutral-800 dark:text-neutral-100 rounded-xl p-5 shadow-xs transition-colors">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold tracking-tight text-neutral-100 truncate">
+              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-neutral-100 truncate">
                 {project.name}
               </h1>
               <StatusIndicator status={project.status} />
             </div>
-            <p className="text-xs text-neutral-400 max-w-2xl leading-relaxed">
+            <p className="text-xs text-slate-600 dark:text-neutral-400 max-w-2xl leading-relaxed">
               {project.description || 'No description provided.'}
             </p>
           </div>
@@ -130,47 +130,47 @@ export const ProjectDetailView: React.FC = () => {
         </div>
 
         {/* Progress & KPIs */}
-        <div className="mt-6 pt-4 border-t border-neutral-800/80 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+        <div className="mt-6 pt-4 border-t border-slate-200 dark:border-neutral-800/80 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
           <div>
-            <span className="text-neutral-500 block">Total Deliverables</span>
-            <span className="text-base font-bold font-mono text-neutral-100 tabular-nums">
+            <span className="text-slate-500 dark:text-neutral-500 block">Total Deliverables</span>
+            <span className="text-base font-bold font-mono text-slate-900 dark:text-neutral-100 tabular-nums">
               {projectTasks.length}
             </span>
           </div>
           <div>
-            <span className="text-neutral-500 block">Completed</span>
-            <span className="text-base font-bold font-mono text-emerald-400 tabular-nums">
+            <span className="text-slate-500 dark:text-neutral-500 block">Completed</span>
+            <span className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400 tabular-nums">
               {completed}
             </span>
           </div>
           <div>
-            <span className="text-neutral-500 block">Pending</span>
-            <span className="text-base font-bold font-mono text-neutral-300 tabular-nums">
+            <span className="text-slate-500 dark:text-neutral-500 block">Pending</span>
+            <span className="text-base font-bold font-mono text-slate-700 dark:text-neutral-300 tabular-nums">
               {pending}
             </span>
           </div>
           <div>
-            <span className="text-neutral-500 block">Overall Progress</span>
-            <span className="text-base font-bold font-mono text-indigo-400 tabular-nums">
+            <span className="text-slate-500 dark:text-neutral-500 block">Overall Progress</span>
+            <span className="text-base font-bold font-mono text-indigo-600 dark:text-indigo-400 tabular-nums">
               {pct}%
             </span>
           </div>
         </div>
 
-        <div className="mt-3 w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+        <div className="mt-3 w-full bg-slate-100 dark:bg-neutral-800 rounded-full h-1.5 overflow-hidden">
           <div
-            className="bg-indigo-500 h-full rounded-full transition-all duration-300"
+            className="bg-indigo-600 dark:bg-indigo-500 h-full rounded-full transition-all duration-300"
             style={{ width: `${pct}%` }}
           />
         </div>
       </div>
 
       {/* Associated Tasks Section */}
-      <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-4 sm:p-5 shadow-xs">
-        <div className="flex items-center justify-between pb-3 border-b border-neutral-800 mb-3">
+      <div className="bg-white border border-slate-200 dark:bg-neutral-900/60 dark:border-neutral-800 rounded-xl p-4 sm:p-5 shadow-xs transition-colors">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-neutral-800 mb-3">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-neutral-100">Project Tasks</h2>
-            <span className="text-xs text-neutral-500 font-mono tabular-nums">
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-neutral-100">Project Tasks</h2>
+            <span className="text-xs text-slate-500 dark:text-neutral-500 font-mono tabular-nums">
               ({projectTasks.length})
             </span>
           </div>
@@ -188,7 +188,7 @@ export const ProjectDetailView: React.FC = () => {
         </div>
 
         {projectTasks.length === 0 ? (
-          <div className="py-10 text-center text-xs text-neutral-500">
+          <div className="py-10 text-center text-xs text-slate-500 dark:text-neutral-500">
             No tasks assigned to this project yet.
             <div className="mt-3">
               <button
@@ -196,14 +196,14 @@ export const ProjectDetailView: React.FC = () => {
                   setTaskToEdit(null);
                   setIsTaskModalOpen(true);
                 }}
-                className="px-3 py-1.5 text-xs text-white bg-indigo-600 rounded-lg"
+                className="px-3 py-1.5 text-xs text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors"
               >
                 Create First Task
               </button>
             </div>
           </div>
         ) : (
-          <div className="divide-y divide-neutral-800/60">
+          <div className="divide-y divide-slate-100 dark:divide-neutral-800/60">
             {projectTasks.map((task) => {
               const isOverdue =
                 task.dueDate && task.dueDate < todayDateStr && task.status !== 'done';
@@ -211,7 +211,7 @@ export const ProjectDetailView: React.FC = () => {
               return (
                 <div
                   key={task.id}
-                  className="py-3 flex items-center justify-between gap-3 hover:bg-neutral-850/40 px-2 rounded-lg transition-colors group"
+                  className="py-3 flex items-center justify-between gap-3 hover:bg-slate-50/80 dark:hover:bg-neutral-850/40 px-2 rounded-lg transition-colors group"
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     <button
@@ -220,7 +220,7 @@ export const ProjectDetailView: React.FC = () => {
                       className={`w-4 h-4 rounded-sm border flex items-center justify-center shrink-0 transition-colors ${
                         task.status === 'done'
                           ? 'bg-emerald-600 border-emerald-600 text-white'
-                          : 'border-neutral-600 hover:border-indigo-400'
+                          : 'border-slate-300 hover:border-indigo-500 dark:border-neutral-600 dark:hover:border-indigo-400'
                       }`}
                     >
                       {task.status === 'done' && <CheckCircle2 className="w-3.5 h-3.5" />}
@@ -234,28 +234,28 @@ export const ProjectDetailView: React.FC = () => {
                         }}
                         className={`text-xs font-medium cursor-pointer hover:underline truncate ${
                           task.status === 'done'
-                            ? 'line-through text-neutral-500'
-                            : 'text-neutral-200 group-hover:text-white'
+                            ? 'line-through text-slate-400 dark:text-neutral-500'
+                            : 'text-slate-800 group-hover:text-slate-900 dark:text-neutral-200 dark:group-hover:text-white'
                         }`}
                       >
                         {task.title}
                       </span>
                       {task.description && (
-                        <p className="text-[11px] text-neutral-400 line-clamp-1 mt-0.5">
+                        <p className="text-[11px] text-slate-500 dark:text-neutral-400 line-clamp-1 mt-0.5">
                           {task.description}
                         </p>
                       )}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 shrink-0 text-xs text-neutral-400">
+                  <div className="flex items-center gap-4 shrink-0 text-xs text-slate-500 dark:text-neutral-400">
                     {/* Status dropdown */}
                     <select
                       value={task.status}
                       onChange={(e) =>
                         updateTask(task.id, { status: e.target.value as TaskStatus })
                       }
-                      className="px-2 py-0.5 text-[11px] bg-neutral-950 border border-neutral-800 rounded text-neutral-300"
+                      className="px-2 py-0.5 text-[11px] bg-slate-50 border border-slate-300 dark:bg-neutral-950 dark:border-neutral-800 rounded text-slate-800 dark:text-neutral-300"
                     >
                       <option value="todo">To Do</option>
                       <option value="in_progress">In Progress</option>
@@ -266,7 +266,7 @@ export const ProjectDetailView: React.FC = () => {
                     {task.dueDate && (
                       <span
                         className={`font-mono text-[11px] tabular-nums ${
-                          isOverdue ? 'text-rose-400 font-semibold' : 'text-neutral-400'
+                          isOverdue ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-slate-500 dark:text-neutral-400'
                         }`}
                       >
                         {isOverdue ? `Overdue ${task.dueDate}` : task.dueDate}
@@ -283,14 +283,14 @@ export const ProjectDetailView: React.FC = () => {
                             activeMenuTaskId === task.id ? null : task.id
                           )
                         }
-                        className="p-1 text-neutral-400 hover:text-white rounded hover:bg-neutral-800"
+                        className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-neutral-400 dark:hover:text-white rounded dark:hover:bg-neutral-800 transition-colors"
                       >
                         <MoreVertical className="w-3.5 h-3.5" />
                       </button>
 
                       {activeMenuTaskId === task.id && (
                         <div
-                          className="absolute right-0 mt-1 w-32 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl p-1 z-30"
+                          className="absolute right-0 mt-1 w-32 bg-white border border-slate-200 dark:bg-neutral-900 dark:border-neutral-800 rounded-lg shadow-xl p-1 z-30"
                           onMouseLeave={() => setActiveMenuTaskId(null)}
                         >
                           <button
@@ -299,7 +299,7 @@ export const ProjectDetailView: React.FC = () => {
                               setTaskToEdit(task);
                               setIsTaskModalOpen(true);
                             }}
-                            className="w-full text-left px-2 py-1 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 rounded"
+                            className="w-full text-left px-2 py-1 text-xs text-slate-700 hover:text-slate-900 hover:bg-slate-100 dark:text-neutral-300 dark:hover:text-white dark:hover:bg-neutral-800 rounded"
                           >
                             Edit
                           </button>
@@ -309,7 +309,7 @@ export const ProjectDetailView: React.FC = () => {
                               // Move to unassigned
                               updateTask(task.id, { projectId: null });
                             }}
-                            className="w-full text-left px-2 py-1 text-xs text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 rounded"
+                            className="w-full text-left px-2 py-1 text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-neutral-400 dark:hover:text-neutral-200 dark:hover:bg-neutral-800 rounded"
                           >
                             Unassign
                           </button>
@@ -318,7 +318,7 @@ export const ProjectDetailView: React.FC = () => {
                               setActiveMenuTaskId(null);
                               handleDeleteTask(task);
                             }}
-                            className="w-full text-left px-2 py-1 text-xs text-rose-400 hover:bg-rose-500/10 rounded"
+                            className="w-full text-left px-2 py-1 text-xs text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10 rounded"
                           >
                             Delete
                           </button>

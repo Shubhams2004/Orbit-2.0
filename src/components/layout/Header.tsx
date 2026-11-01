@@ -77,37 +77,37 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
   };
 
   return (
-    <header className="h-14 px-4 sm:px-6 flex items-center justify-between border-b border-neutral-800/80 bg-neutral-950/70 backdrop-blur-md sticky top-0 z-30 select-none">
+    <header className="h-14 px-4 sm:px-6 flex items-center justify-between border-b border-slate-200/90 bg-white/80 dark:border-neutral-800/80 dark:bg-neutral-950/70 backdrop-blur-md sticky top-0 z-30 select-none">
       {/* Left: Mobile Toggle & Breadcrumbs */}
       <div className="flex items-center gap-3 min-w-0">
         <button
           onClick={onOpenMobileMenu}
-          className="md:hidden p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition-colors"
+          className="md:hidden p-1.5 text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors"
           title="Open Menu"
         >
           <Menu className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-2 text-xs text-neutral-400 truncate">
+        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-neutral-400 truncate">
           <span
             onClick={() => setCurrentPage('overview')}
-            className="hover:text-neutral-200 cursor-pointer hidden sm:inline"
+            className="hover:text-slate-800 dark:hover:text-neutral-200 cursor-pointer hidden sm:inline"
           >
             Orbit
           </span>
-          <ChevronRight className="w-3.5 h-3.5 hidden sm:inline text-neutral-600" />
+          <ChevronRight className="w-3.5 h-3.5 hidden sm:inline text-slate-400 dark:text-neutral-600" />
           {currentPage === 'project_detail' && (
             <>
               <span
                 onClick={() => setCurrentPage('projects')}
-                className="hover:text-neutral-200 cursor-pointer"
+                className="hover:text-slate-800 dark:hover:text-neutral-200 cursor-pointer"
               >
                 Projects
               </span>
-              <ChevronRight className="w-3.5 h-3.5 text-neutral-600" />
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-neutral-600" />
             </>
           )}
-          <span className="font-semibold text-neutral-100 truncate">
+          <span className="font-semibold text-slate-900 dark:text-neutral-100 truncate">
             {getBreadcrumb()}
           </span>
         </div>
@@ -118,13 +118,13 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
         <button
           type="button"
           onClick={() => setCommandPaletteOpen(true)}
-          className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-neutral-400 bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 rounded-lg transition-colors cursor-pointer group"
+          className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-slate-500 bg-slate-100/90 hover:bg-slate-200/80 border border-slate-200/90 dark:text-neutral-400 dark:bg-neutral-900 dark:hover:bg-neutral-850 dark:border-neutral-800 rounded-lg transition-colors cursor-pointer group"
         >
           <div className="flex items-center gap-2">
-            <Search className="w-3.5 h-3.5 text-neutral-500 group-hover:text-neutral-300 transition-colors" />
+            <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:text-neutral-500 dark:group-hover:text-neutral-300 transition-colors" />
             <span>Search tasks, projects, or ask agent...</span>
           </div>
-          <kbd className="px-1.5 py-0.5 text-[10px] font-mono text-neutral-500 bg-neutral-950 border border-neutral-800 rounded">
+          <kbd className="px-1.5 py-0.5 text-[10px] font-mono text-slate-500 bg-white border border-slate-200 dark:text-neutral-500 dark:bg-neutral-950 dark:border-neutral-800 rounded shadow-2xs">
             ⌘K
           </kbd>
         </button>
@@ -135,7 +135,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
         {/* Mobile search trigger */}
         <button
           onClick={() => setCommandPaletteOpen(true)}
-          className="sm:hidden p-2 text-neutral-400 hover:text-neutral-200 rounded-lg hover:bg-neutral-800 transition-colors"
+          className="sm:hidden p-2 text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-neutral-200 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors"
           title="Search (⌘K)"
         >
           <Search className="w-4 h-4" />
@@ -144,7 +144,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
         {/* Quick Create Button */}
         <button
           onClick={() => openQuickCreate('task')}
-          className="p-1.5 sm:px-2.5 sm:py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors flex items-center gap-1.5"
+          className="p-1.5 sm:px-2.5 sm:py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
           title="Create task"
         >
           <Plus className="w-4 h-4" />
@@ -154,10 +154,10 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
         {/* View Landing Page Button */}
         <button
           onClick={() => setCurrentPage('landing')}
-          className="p-1.5 sm:px-2.5 sm:py-1.5 text-xs font-medium text-neutral-300 hover:text-white bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg transition-colors flex items-center gap-1.5"
+          className="p-1.5 sm:px-2.5 sm:py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 dark:text-neutral-300 dark:hover:text-white dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:border-neutral-800 rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs"
           title="View Landing Page"
         >
-          <Globe className="w-3.5 h-3.5 text-indigo-400" />
+          <Globe className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
           <span className="hidden lg:inline">Landing Page</span>
         </button>
 
@@ -165,7 +165,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
         <div className="relative">
           <button
             onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-            className="p-2 text-neutral-400 hover:text-neutral-200 rounded-lg hover:bg-neutral-800/80 transition-colors relative"
+            className="p-2 text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-neutral-200 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800/80 transition-colors relative"
             title="Notifications"
           >
             <Bell className="w-4 h-4" />
@@ -176,15 +176,15 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
 
           {isNotificationsOpen && (
             <div
-              className="absolute right-0 mt-2 w-80 bg-neutral-900 border border-neutral-800 rounded-xl shadow-2xl p-3 text-xs text-neutral-200 z-50 animate-in fade-in zoom-in-95"
+              className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 dark:bg-neutral-900 dark:border-neutral-800 rounded-xl shadow-2xl p-3 text-xs text-slate-800 dark:text-neutral-200 z-50 animate-in fade-in zoom-in-95"
               onMouseLeave={() => setIsNotificationsOpen(false)}
             >
-              <div className="flex items-center justify-between pb-2 border-b border-neutral-800 mb-2">
-                <span className="font-semibold text-neutral-100">Notifications</span>
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-neutral-800 mb-2">
+                <span className="font-semibold text-slate-900 dark:text-neutral-100">Notifications</span>
                 {unreadActivities.length > 0 && (
                   <button
                     onClick={markAllRead}
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                    className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 flex items-center gap-1"
                   >
                     <Check className="w-3 h-3" />
                     Mark all read
@@ -204,19 +204,21 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
                         setIsNotificationsOpen(false);
                       }}
                       className={`p-2 rounded-lg cursor-pointer transition-colors ${
-                        isUnread ? 'bg-neutral-800/80' : 'hover:bg-neutral-800/50'
+                        isUnread
+                          ? 'bg-slate-100 dark:bg-neutral-800/80'
+                          : 'hover:bg-slate-50 dark:hover:bg-neutral-800/50'
                       }`}
                     >
-                      <div className="font-medium text-neutral-100 flex items-center justify-between">
+                      <div className="font-medium text-slate-900 dark:text-neutral-100 flex items-center justify-between">
                         <span className="truncate">{act.title}</span>
                         {isUnread && (
                           <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0 ml-2" />
                         )}
                       </div>
-                      <div className="text-[11px] text-neutral-400 line-clamp-2 mt-0.5">
+                      <div className="text-[11px] text-slate-600 dark:text-neutral-400 line-clamp-2 mt-0.5">
                         {act.description}
                       </div>
-                      <div className="text-[10px] text-neutral-500 mt-1 font-mono tabular-nums">
+                      <div className="text-[10px] text-slate-400 dark:text-neutral-500 mt-1 font-mono tabular-nums">
                         {new Date(act.timestamp).toLocaleTimeString([], {
                           hour: '2-digit',
                           minute: '2-digit',
@@ -232,7 +234,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
                   setIsNotificationsOpen(false);
                   setCurrentPage('activity');
                 }}
-                className="w-full text-center pt-2 mt-2 border-t border-neutral-800 text-[11px] text-neutral-400 hover:text-neutral-200 block"
+                className="w-full text-center pt-2 mt-2 border-t border-slate-200 dark:border-neutral-800 text-[11px] text-slate-500 hover:text-slate-800 dark:text-neutral-400 dark:hover:text-neutral-200 block"
               >
                 View all activity timeline →
               </button>
@@ -243,13 +245,13 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
         {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
-          className="p-2 text-neutral-400 hover:text-neutral-200 rounded-lg hover:bg-neutral-800/80 transition-colors"
+          className="p-2 text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-neutral-200 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800/80 transition-colors"
           title={`Switch to ${settings.theme === 'dark' ? 'Light' : 'Dark'} theme`}
         >
           {settings.theme === 'dark' ? (
             <Sun className="w-4 h-4 text-amber-400" />
           ) : (
-            <Moon className="w-4 h-4 text-neutral-600" />
+            <Moon className="w-4 h-4 text-slate-700" />
           )}
         </button>
 
@@ -265,15 +267,15 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
                 src={user.avatarUrl}
                 alt={user.name}
                 referrerPolicy="no-referrer"
-                className="w-7 h-7 rounded-full object-cover ring-1 ring-neutral-700 group-hover:ring-indigo-500 transition-all"
+                className="w-7 h-7 rounded-full object-cover ring-1 ring-slate-300 dark:ring-neutral-700 group-hover:ring-indigo-500 transition-all"
               />
-              <span className="text-xs font-medium text-neutral-300 group-hover:text-white hidden lg:inline max-w-[120px] truncate">
+              <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900 dark:text-neutral-300 dark:group-hover:text-white hidden lg:inline max-w-[120px] truncate">
                 {user.name}
               </span>
             </div>
             <button
               onClick={() => logoutUser()}
-              className="p-1.5 text-neutral-400 hover:text-rose-400 rounded-lg hover:bg-neutral-800/80 transition-colors"
+              className="p-1.5 text-slate-500 hover:text-rose-600 dark:text-neutral-400 dark:hover:text-rose-400 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800/80 transition-colors"
               title="Sign Out"
             >
               <LogOut className="w-3.5 h-3.5" />
