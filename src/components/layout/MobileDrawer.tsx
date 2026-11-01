@@ -9,6 +9,7 @@ import {
   Settings,
   X,
   Plus,
+  Globe,
 } from 'lucide-react';
 
 interface MobileDrawerProps {
@@ -29,12 +30,13 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({ isOpen, onClose }) =
     icon: React.ComponentType<{ className?: string }>;
     count?: number;
   }> = [
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'tasks', label: 'My Tasks', icon: CheckSquare, count: pendingTaskCount },
     { id: 'projects', label: 'Projects', icon: FolderGit2, count: projects.length },
     { id: 'agent', label: 'AI Chat', icon: Bot },
     { id: 'activity', label: 'Activity', icon: Activity },
     { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'landing', label: 'Landing Page', icon: Globe },
   ];
 
   const handleNav = (page: PageView) => {

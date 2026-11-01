@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatAttachment } from '../../types';
 import {
-  Send,
+  ArrowUp,
   Square,
   Paperclip,
   X,
@@ -15,6 +15,7 @@ interface MessageComposerProps {
   onStopGeneration: () => void;
   isStreaming: boolean;
   disabled?: boolean;
+  placeholder?: string;
 }
 
 export const MessageComposer: React.FC<MessageComposerProps> = ({
@@ -22,17 +23,18 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   onStopGeneration,
   isStreaming,
   disabled = false,
+  placeholder = 'Message Orbit...',
 }) => {
   const [content, setContent] = useState('');
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-resize textarea
+  // Auto-resize textarea to fit multiline prompts gracefully up to 200px
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
   }, [content]);
 
@@ -59,7 +61,6 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
     }
   };
 
-  // Simulated file upload
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -71,7 +72,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
       type: f.name.endsWith('.ts') || f.name.endsWith('.sql') || f.name.endsWith('.json')
         ? 'code'
         : 'doc',
-      contentSnippet: `File: ${f.name} uploaded for contextual analysis.`,
+      contentSnippet: `File: ${f.name} attached for analysis.`,
     }));
 
     setAttachments((prev) => [...prev, ...newAttachments]);
@@ -82,8 +83,10 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   };
 
+  const hasValidInput = content.trim().length > 0 || attachments.length > 0;
+
   return (
-    <div className="w-full">
+    <div className="w-full max-w-3xl mx-auto">
       {/* Hidden file input */}
       <input
         type="file"
@@ -95,11 +98,11 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
 
       {/* Attachment Pills Container */}
       {attachments.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2">
+        <div className="mb-2.5 flex flex-wrap gap-2 px-1">
           {attachments.map((att) => (
             <div
               key={att.id}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-900 border border-neutral-750 text-xs text-neutral-200 animate-in fade-in"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-neutral-900 border border-neutral-750 text-xs text-neutral-200 shadow-xs"
             >
               {att.type === 'code' ? (
                 <FileCode className="w-3.5 h-3.5 text-indigo-400" />
@@ -121,10 +124,10 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
         </div>
       )}
 
-      {/* Multiline Composer Box */}
+      {/* Floating ChatGPT / Claude Capsule Composer */}
       <form
         onSubmit={handleSubmit}
-        className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-3 shadow-lg focus-within:border-violet-500/80 transition-colors"
+        className="bg-[#212121] border border-neutral-750/80 rounded-3xl p-2.5 sm:p-3 shadow-xl focus-within:border-neutral-500 transition-all flex flex-col"
       >
         <textarea
           ref={textareaRef}
@@ -132,60 +135,58 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           onChange={(e) => setContent(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={disabled}
-          placeholder={
-            isStreaming
-              ? 'Model is streaming response...'
-              : 'Message Orbit AI or ask to plan, triage, or break down tasks... (Enter to send, Shift+Enter for newline)'
-          }
+          placeholder={isStreaming ? 'Thinking...' : placeholder}
           rows={1}
-          className="w-full text-xs sm:text-sm bg-transparent border-0 text-neutral-100 placeholder-neutral-500 focus:outline-hidden resize-none leading-relaxed max-h-48"
+          className="w-full px-2 py-1 bg-transparent text-[14px] text-neutral-100 placeholder-neutral-500 resize-none focus:outline-hidden leading-relaxed max-h-52 min-h-[28px]"
         />
 
-        {/* Composer Toolbar */}
-        <div className="flex items-center justify-between pt-2 border-t border-neutral-800/60 mt-1">
-          {/* Left Actions: Attachments */}
-          <div className="flex items-center gap-2">
+        {/* Bottom Control Bar */}
+        <div className="mt-2 flex items-center justify-between pt-1">
+          {/* Left Actions (Attachment) */}
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="p-1.5 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 rounded-lg transition-colors flex items-center gap-1 text-xs"
-              title="Attach document or code snippet"
+              className="p-1.5 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 rounded-full transition-colors"
+              title="Attach files or code"
             >
               <Paperclip className="w-4 h-4" />
-              <span className="text-[11px] hidden sm:inline">Attach</span>
             </button>
-
-            <span className="text-[11px] text-neutral-500 hidden md:inline">
-              Markdown & code blocks supported
-            </span>
           </div>
 
-          {/* Right Action: Send / Stop */}
+          {/* Right Action: Send / Stop Circular Button */}
           <div className="flex items-center gap-2">
             {isStreaming ? (
               <button
                 type="button"
                 onClick={onStopGeneration}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded-lg transition-colors cursor-pointer"
-                title="Stop generation"
+                className="w-8 h-8 rounded-full bg-white text-black hover:bg-neutral-200 flex items-center justify-center transition-all shadow-xs"
+                title="Stop generating"
               >
-                <Square className="w-3.5 h-3.5 text-rose-400 fill-rose-400" />
-                <span>Stop</span>
+                <Square className="w-3.5 h-3.5 fill-black" />
               </button>
             ) : (
               <button
                 type="submit"
-                disabled={disabled || (!content.trim() && attachments.length === 0)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:hover:bg-violet-600 rounded-lg transition-colors shadow-xs cursor-pointer"
-                title="Send message"
+                disabled={!hasValidInput || disabled}
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-xs ${
+                  hasValidInput && !disabled
+                    ? 'bg-white text-black hover:bg-neutral-200 cursor-pointer'
+                    : 'bg-neutral-800 text-neutral-500 cursor-not-allowed opacity-60'
+                }`}
+                title="Send message (Enter)"
               >
-                <span>Send</span>
-                <Send className="w-3.5 h-3.5" />
+                <ArrowUp className="w-4 h-4 stroke-[2.5]" />
               </button>
             )}
           </div>
         </div>
       </form>
+
+      {/* ChatGPT / Claude subtle bottom disclaimer */}
+      <div className="mt-2 text-center text-[11px] text-neutral-500 select-none">
+        Orbit can make mistakes. Verify important information.
+      </div>
     </div>
   );
 };

@@ -13,6 +13,7 @@ import {
   LogIn,
   LogOut,
   User as UserIcon,
+  Globe,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -42,8 +43,10 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
   // Determine breadcrumb label
   const getBreadcrumb = () => {
     switch (currentPage) {
+      case 'landing':
+        return 'Landing Page';
       case 'overview':
-        return 'Overview';
+        return 'Dashboard';
       case 'tasks':
         return 'My Tasks';
       case 'projects':
@@ -146,6 +149,16 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
         >
           <Plus className="w-4 h-4" />
           <span className="hidden md:inline">New</span>
+        </button>
+
+        {/* View Landing Page Button */}
+        <button
+          onClick={() => setCurrentPage('landing')}
+          className="p-1.5 sm:px-2.5 sm:py-1.5 text-xs font-medium text-neutral-300 hover:text-white bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg transition-colors flex items-center gap-1.5"
+          title="View Landing Page"
+        >
+          <Globe className="w-3.5 h-3.5 text-indigo-400" />
+          <span className="hidden lg:inline">Landing Page</span>
         </button>
 
         {/* Notifications Popover */}

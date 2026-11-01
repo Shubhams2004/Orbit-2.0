@@ -11,6 +11,7 @@ import {
   Plus,
   Bot,
   Activity as ActivityIcon,
+  Globe,
 } from 'lucide-react';
 import { PriorityIndicator } from '../components/common/Indicators';
 
@@ -64,26 +65,43 @@ export const OverviewView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Greeting and Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-2 border-b border-neutral-800/60">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-neutral-800/60">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-100">
-            Good morning, {user.name.split(' ')[0]}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-100">
+              Workspace Dashboard
+            </h1>
+            <span className="text-xs text-neutral-400 font-normal hidden sm:inline">
+              · {user.name}
+            </span>
+          </div>
           <p className="text-xs text-neutral-400 mt-1 flex items-center gap-1.5">
             <Calendar className="w-3.5 h-3.5 text-neutral-400" />
             <span>Wednesday, October 14, 2026</span>
             <span aria-hidden="true">·</span>
-            <span>Workload Nominal</span>
+            <span>Cloudflare D1 Synced</span>
+            <span aria-hidden="true">·</span>
+            <span className="text-emerald-400 font-mono">Nominal</span>
           </p>
         </div>
 
-        <button
-          onClick={() => openQuickCreate('task')}
-          className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors shadow-xs"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>New Task</span>
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={() => setCurrentPage('landing')}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:text-white bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg transition-colors"
+          >
+            <Globe className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Landing Page</span>
+          </button>
+
+          <button
+            onClick={() => openQuickCreate('task')}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors shadow-xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>New Task</span>
+          </button>
+        </div>
       </div>
 
       {/* Prominent AI Assistant Command Center Entry */}

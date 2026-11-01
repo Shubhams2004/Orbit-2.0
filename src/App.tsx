@@ -19,10 +19,12 @@ import { QuickCreateModal } from './components/modals/QuickCreateModal';
 import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
 import { ConfirmModal } from './components/modals/ConfirmModal';
 import { AuthModal } from './components/modals/AuthModal';
+import { LandingPageView } from './views/LandingPageView';
 
 const WorkspaceShell: React.FC = () => {
   const {
     currentPage,
+    setCurrentPage,
     settings,
     apiError,
     clearApiError,
@@ -32,6 +34,24 @@ const WorkspaceShell: React.FC = () => {
   } = useWorkspace();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // If viewing Landing Page, render full-bleed landing view with chatbot first & planner
+  if (currentPage === 'landing') {
+    return (
+      <div
+        className={`min-h-screen text-neutral-100 ${
+          settings.theme === 'dark' ? 'bg-neutral-950' : 'bg-neutral-50 text-neutral-900'
+        }`}
+      >
+        <LandingPageView onEnterDashboard={() => setCurrentPage('overview')} />
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={closeAuthModal}
+          initialMode={authModalMode}
+        />
+      </div>
+    );
+  }
 
   const renderActiveView = () => {
     switch (currentPage) {

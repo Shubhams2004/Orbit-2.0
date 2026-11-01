@@ -42,6 +42,7 @@ import {
 } from '../lib/firebase';
 
 export type PageView =
+  | 'landing'
   | 'overview'
   | 'tasks'
   | 'projects'
@@ -183,7 +184,7 @@ const TODAY_DATE = '2026-10-14';
 
 export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Navigation
-  const [currentPage, setCurrentPage] = useState<PageView>('overview');
+  const [currentPage, setCurrentPage] = useState<PageView>('landing');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   // Settings
