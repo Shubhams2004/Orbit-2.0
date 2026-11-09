@@ -1,9 +1,39 @@
 import { Env, AuthenticatedUser } from '../types';
 import { jsonResponse, errorResponse } from '../utils/response';
+import { SearchManager } from '../services/search/manager';
+import { TavilySearchProvider } from '../services/search/tavily';
+import { SearchEvidenceSource } from '../services/search/types';
+import { ModelProviderRegistry } from '../services/ai/registry';
+import { ModelMessage, ModelProviderError } from '../services/ai/types';
+import { DEFAULT_CLOUDFLARE_MODEL } from '../services/ai/providers/cloudflare';
 
-const WORKERS_AI_MODEL = '@cf/meta/llama-3.1-8b-instruct-fast';
-const SYSTEM_PROMPT =
+const WORKERS_AI_MODEL = DEFAULT_CLOUDFLARE_MODEL;
+const BASE_SYSTEM_PROMPT =
   'You are Orbit, an intelligent personal workspace co-pilot. Provide clear, accurate, and concise assistance for task management, project planning, and technical productivity. Keep responses well-structured and helpful.';
+
+// Module-level SearchManager instance for in-memory caching across requests
+let cachedSearchManager: SearchManager | null = null;
+let lastApiKeyUsed: string | undefined = undefined;
+
+function getSearchManager(env: Env): SearchManager {
+  const currentKey = env.TAVILY_API_KEY?.trim();
+  if (cachedSearchManager && lastApiKeyUsed === currentKey) {
+    return cachedSearchManager;
+  }
+
+  let provider: TavilySearchProvider | null = null;
+  if (currentKey) {
+    provider = new TavilySearchProvider({
+      apiKey: currentKey,
+      baseUrl: env.TAVILY_BASE_URL,
+      maxResults: 5,
+    });
+  }
+
+  cachedSearchManager = new SearchManager(provider);
+  lastApiKeyUsed = currentKey;
+  return cachedSearchManager;
+}
 
 interface MessageHistoryRow {
   role: 'user' | 'assistant' | 'system';
@@ -15,8 +45,10 @@ export async function handleAiChat(
   env: Env,
   user: AuthenticatedUser
 ): Promise<Response> {
-  // 1. Guard: Check Cloudflare Workers AI Binding
-  if (!env.AI) {
+  // 1. Guard: Check AI Capability (Cloudflare Workers AI default or active external providers)
+  const modelRegistry = ModelProviderRegistry.fromEnv(env);
+  const activeProviders = modelRegistry.listProviders().filter((p) => p.isConfigured);
+  if (activeProviders.length === 0) {
     return errorResponse(
       'AI_UNAVAILABLE',
       'Cloudflare Workers AI binding "AI" is not configured or unavailable on this Worker.',
@@ -53,6 +85,16 @@ export async function handleAiChat(
     typeof body.conversationId === 'string' && body.conversationId.trim()
       ? body.conversationId.trim()
       : null;
+
+  const requestedModel =
+    typeof body.model === 'string' && body.model.trim()
+      ? body.model.trim()
+      : typeof body.modelId === 'string' && body.modelId.trim()
+      ? body.modelId.trim()
+      : undefined;
+
+  // Explicit web search mode requested by client ('auto' | boolean)
+  const webSearchMode = body.webSearch === true ? true : body.webSearch === false ? false : undefined;
 
   const now = new Date().toISOString();
 
@@ -129,9 +171,53 @@ export async function handleAiChat(
     );
   }
 
-  // 5. Retrieve Recent Conversation Context (Most recent 8 messages before this prompt)
+  // 5. Orbit Web Intelligence: Intelligent Detection & Source Retrieval
+  const searchManager = getSearchManager(env);
+  const requiresSearch = searchManager.shouldSearch(prompt, webSearchMode);
+
+  let searchSources: SearchEvidenceSource[] = [];
+  let searchRetrievedAt: string | null = null;
+  let searchCached = false;
+  let searchNotice: string | null = null;
+
+  if (requiresSearch) {
+    if (!searchManager.isConfigured()) {
+      // If client explicitly requested web search or search was detected, notify gracefully without breaking inference
+      searchNotice = 'Web search provider (Tavily) is not configured in Worker environment.';
+    } else {
+      try {
+        const searchResult = await searchManager.search(prompt, { maxResults: 5 });
+        searchSources = searchResult.sources;
+        searchRetrievedAt = searchResult.retrievedAt;
+        searchCached = Boolean(searchResult.cached);
+      } catch (searchErr: unknown) {
+        console.error('[Orbit Web Intelligence] Search retrieval failure:', searchErr);
+        searchNotice =
+          searchErr instanceof Error
+            ? searchErr.message
+            : 'Web search encountered an unexpected retrieval error.';
+      }
+    }
+  }
+
+  // 6. Build Contextual System Prompt Grounded with Retrieved Evidence
+  let systemPrompt = BASE_SYSTEM_PROMPT;
+  if (searchSources.length > 0) {
+    const evidenceText = searchSources
+      .map(
+        (s, idx) =>
+          `[Source ${idx + 1}]: "${s.title}" (${s.url})\nDate: ${s.publishedDate || 'Recent'}\nContent: ${s.content}`
+      )
+      .join('\n\n');
+
+    systemPrompt += `\n\n--- REAL-TIME WEB EVIDENCE (Retrieved: ${searchRetrievedAt || now}) ---\n${evidenceText}\n\nGround your response strictly on the evidence above. Reference facts clearly and cite claims using markdown links or numbered citations matching the source URLs. If the evidence does not contain sufficient details to answer, state this clearly without fabricating facts.`;
+  } else if (requiresSearch && searchNotice) {
+    systemPrompt += `\n\nNote: A live internet search was attempted or requested, but could not be completed (${searchNotice}). Answer to the best of your foundational knowledge, and clearly disclose to the user that live internet data was unavailable.`;
+  }
+
+  // 7. Retrieve Recent Conversation Context (Most recent 8 messages before this prompt)
   const aiMessages: { role: string; content: string }[] = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: systemPrompt },
   ];
 
   try {
@@ -156,35 +242,39 @@ export async function handleAiChat(
 
   aiMessages.push({ role: 'user', content: prompt });
 
-  // 6. Execute Cloudflare Workers AI Model
+  // 8. Execute Model via Modular Provider Registry
   let assistantText = '';
+  let executedModel = WORKERS_AI_MODEL;
+  let executedProvider = 'cloudflare';
+  let fallbackUsed = false;
+
   try {
-    const aiResponse: any = await env.AI.run(WORKERS_AI_MODEL, {
-      messages: aiMessages,
-      max_tokens: 1024,
+    const execResult = await modelRegistry.execute({
+      messages: aiMessages as ModelMessage[],
+      maxTokens: 1024,
+      modelId: requestedModel,
+      allowFallback: body.allowFallback !== false,
     });
 
-    if (aiResponse && typeof aiResponse === 'object') {
-      assistantText = typeof aiResponse.response === 'string'
-        ? aiResponse.response.trim()
-        : JSON.stringify(aiResponse);
-    } else if (typeof aiResponse === 'string') {
-      assistantText = aiResponse.trim();
-    }
-
-    if (!assistantText) {
-      assistantText = 'I received your message, but no response was generated by the model.';
-    }
+    assistantText = execResult.text;
+    executedModel = execResult.modelId;
+    executedProvider = execResult.provider;
+    fallbackUsed = Boolean(execResult.fallbackUsed);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Workers AI execution error';
+    if (err instanceof ModelProviderError) {
+      return errorResponse(err.code, err.message, err.statusCode, {
+        provider: err.provider,
+      });
+    }
+    const message = err instanceof Error ? err.message : 'Model execution error';
     return errorResponse(
       'AI_GENERATION_FAILED',
-      `Failed to generate response from Workers AI model: ${message}`,
+      `Failed to generate response from model: ${message}`,
       502
     );
   }
 
-  // 7. Persist Assistant Response to D1
+  // 9. Persist Assistant Response to D1
   const assistantMsgId = `msg_a_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   const assistantNow = new Date().toISOString();
 
@@ -216,14 +306,29 @@ export async function handleAiChat(
     );
   }
 
-  // 8. Return Clean JSON Response
+  // 10. Return Structured JSON Response with Web Intelligence & Model Metadata
   return jsonResponse(
     {
       response: assistantText,
       conversationId,
       messageId: assistantMsgId,
-      model: WORKERS_AI_MODEL,
+      model: executedModel,
+      provider: executedProvider,
+      fallbackUsed,
+      webSearch: {
+        triggered: requiresSearch,
+        sourcesCount: searchSources.length,
+        sources: searchSources.map((s) => ({
+          title: s.title,
+          url: s.url,
+          publishedDate: s.publishedDate,
+        })),
+        retrievedAt: searchRetrievedAt,
+        cached: searchCached,
+        notice: searchNotice,
+      },
     },
     200
   );
 }
+

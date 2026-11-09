@@ -12,6 +12,11 @@ export interface Env {
   JWT_AUDIENCE?: string;
   FIREBASE_PROJECT_ID?: string;
   ALLOW_DEV_TOKENS?: string;
+  TAVILY_API_KEY?: string;
+  TAVILY_BASE_URL?: string;
+  OPENAI_API_KEY?: string;
+  GEMINI_API_KEY?: string;
+  ANTHROPIC_API_KEY?: string;
   ASSETS?: Fetcher;
 }
 

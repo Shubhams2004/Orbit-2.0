@@ -9,6 +9,15 @@ import { isDevToken, ApiClient } from '../src/services/apiClient';
 import { isDemoConversationId, DEMO_CONVERSATION_IDS } from '../src/services/conversationService';
 import { formatFirebaseAuthError } from '../src/lib/firebase';
 import { parsePath, routeToPath } from '../src/context/WorkspaceContext';
+import { SearchManager } from '../worker/services/search/manager';
+import { TavilySearchProvider } from '../worker/services/search/tavily';
+import { ISearchProvider, SearchQueryResult } from '../worker/services/search/types';
+import { ModelProviderRegistry } from '../worker/services/ai/registry';
+import { CloudflareWorkersAiProvider, DEFAULT_CLOUDFLARE_MODEL } from '../worker/services/ai/providers/cloudflare';
+import { OpenAiModelProvider } from '../worker/services/ai/providers/openai';
+import { GeminiModelProvider } from '../worker/services/ai/providers/gemini';
+import { AnthropicModelProvider } from '../worker/services/ai/providers/anthropic';
+import { ModelProviderError } from '../worker/services/ai/types';
 
 async function signRs256Jwt(
   header: Record<string, unknown>,
@@ -1386,6 +1395,517 @@ async function runTests() {
   assert(routeToPath('agent') === '/chat', 'routeToPath("agent") generates "/chat"');
   assert(routeToPath('activity') === '/activity', 'routeToPath("activity") generates "/activity"');
   assert(routeToPath('settings') === '/settings', 'routeToPath("settings") generates "/settings"');
+
+  // -------------------------------------------------------------
+  // 13. Testing Orbit 2.0 Web Intelligence (Search Detection, Tavily Adapter, Grounding, Caching)
+  // -------------------------------------------------------------
+  console.log('\n13. Testing Orbit 2.0 Web Intelligence (Detection, Adapter, Caching, Grounding):');
+
+  // Test 13.1: Intelligent Search Intent Detection
+  const mockProvider: ISearchProvider = {
+    name: 'mock_tavily',
+    async search(query: string): Promise<SearchQueryResult> {
+      return {
+        query,
+        sources: [
+          {
+            title: 'Cloudflare Workers 2026 Roadmap',
+            url: 'https://blog.cloudflare.com/workers-2026-roadmap',
+            content: 'Cloudflare announced native AI inference updates and sub-5ms cold starts across all edge POPs in 2026.',
+            publishedDate: '2026-03-15',
+          },
+          {
+            title: 'Serverless AI Performance Benchmarks',
+            url: 'https://example.com/ai-benchmarks',
+            content: 'Llama 3.1 8B Fast achieves sub-100ms TTFT on global edge workers.',
+            publishedDate: '2026-04-01',
+          },
+        ],
+        retrievedAt: '2026-10-14T12:00:00.000Z',
+        provider: 'mock_tavily',
+      };
+    },
+  };
+
+  const testSearchManager = new SearchManager(mockProvider, { ttlMs: 5000 });
+
+  assert(testSearchManager.isConfigured(), 'SearchManager recognizes configured provider');
+  assert(testSearchManager.getProviderName() === 'mock_tavily', 'Provider name is mock_tavily');
+
+  // Should NOT search ordinary conversation
+  assert(!testSearchManager.shouldSearch('Hello'), 'Does not trigger search for simple greeting "Hello"');
+  assert(!testSearchManager.shouldSearch('How are you today?'), 'Does not trigger search for ordinary pleasantry');
+  assert(!testSearchManager.shouldSearch('create task for sprint planning'), 'Does not trigger search for internal workspace action');
+
+  // Should trigger search for live/recent queries
+  assert(testSearchManager.shouldSearch('What are the latest Cloudflare releases in 2026?'), 'Triggers search for "latest Cloudflare releases in 2026"');
+  assert(testSearchManager.shouldSearch('Find online news about serverless GPUs'), 'Triggers search for "Find online news"');
+  assert(testSearchManager.shouldSearch('Who won the recent engineering award?'), 'Triggers search for "recent engineering award"');
+
+  // Explicit override test
+  assert(testSearchManager.shouldSearch('hello', true), 'Explicit webSearch: true forces search on any query');
+  assert(!testSearchManager.shouldSearch('What are the latest releases in 2026?', false), 'Explicit webSearch: false suppresses search');
+
+  // Test 13.2: Result Caching and deduplication
+  const firstSearchResult = await testSearchManager.search('Cloudflare Workers 2026');
+  assert(firstSearchResult.sources.length === 2, 'Search returns expected source count');
+  assert(!firstSearchResult.cached, 'First search execution is not cached');
+
+  const secondSearchResult = await testSearchManager.search('Cloudflare Workers 2026');
+  assert(secondSearchResult.cached === true, 'Repeated search within TTL returns cached result');
+  assert(secondSearchResult.sources[0].url === 'https://blog.cloudflare.com/workers-2026-roadmap', 'Cached sources match original result');
+
+  // Test 13.3: Unconfigured Search Provider Graceful Handling
+  const unconfiguredManager = new SearchManager(null);
+  assert(!unconfiguredManager.isConfigured(), 'Unconfigured SearchManager reports isConfigured() === false');
+
+  // Test 13.4: Worker Web Intelligence Endpoint Execution with Grounding Evidence
+  // Re-register test public key for valid token verification
+  registerTestPublicKey(testKid, firebaseKeyPair.publicKey);
+
+  const webAiEnv: Env = {
+    ...aiProdEnv,
+    TAVILY_API_KEY: 'tvly-test-mock-key-12345',
+  };
+
+  // Mock global fetch to intercept Tavily API call
+  const originalFetch = globalThis.fetch;
+  let interceptedTavilyCall = false;
+  let interceptedQuery = '';
+
+  globalThis.fetch = async (input: any, init?: any): Promise<Response> => {
+    const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input?.url || '';
+    if (urlStr.includes('api.tavily.com')) {
+      interceptedTavilyCall = true;
+      try {
+        const parsedBody = JSON.parse(init?.body || '{}');
+        interceptedQuery = parsedBody.query || '';
+      } catch {}
+
+      return new Response(
+        JSON.stringify({
+          query: interceptedQuery,
+          results: [
+            {
+              title: 'Official Cloudflare 2026 Release Notes',
+              url: 'https://developers.cloudflare.com/workers/release-notes-2026',
+              content: 'Workers now include native Llama 3.1 8B Fast with sub-50ms latency.',
+              published_date: '2026-05-10',
+              score: 0.98,
+            },
+            {
+              title: 'Official Cloudflare 2026 Release Notes', // duplicate URL to test deduplication
+              url: 'https://developers.cloudflare.com/workers/release-notes-2026',
+              content: 'Duplicate entry.',
+              published_date: '2026-05-10',
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const searchChatRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${validFbToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'What are the latest Cloudflare release notes in 2026?',
+        }),
+      }),
+      webAiEnv
+    );
+
+    const searchChatJson: any = await searchChatRes.json();
+    assert(searchChatRes.status === 200, 'Live search chat request returns HTTP 200');
+    assert(interceptedTavilyCall, 'Tavily search provider API was invoked by Worker');
+    const webData = searchChatJson.data?.webSearch || searchChatJson.webSearch;
+    assert(webData?.triggered === true, 'Response metadata marks webSearch.triggered as true');
+    assert(webData?.sourcesCount === 1, 'Sources deduplicated correctly (1 unique source)');
+    assert(webData?.sources[0].url === 'https://developers.cloudflare.com/workers/release-notes-2026', 'Source URL returned in response metadata');
+
+    // Verify system prompt contained grounded evidence
+    const groundedSystemMsg = lastCapturedMessages.find((m) => m.role === 'system');
+    assert(
+      Boolean(groundedSystemMsg && groundedSystemMsg.content.includes('REAL-TIME WEB EVIDENCE')),
+      'System prompt injected with real-time web evidence'
+    );
+    assert(
+      Boolean(groundedSystemMsg && groundedSystemMsg.content.includes('https://developers.cloudflare.com/workers/release-notes-2026')),
+      'Evidence citations passed to AI model context'
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  // Test 13.5: Graceful degradation when Tavily quota exhausted (HTTP 429)
+  globalThis.fetch = async (input: any, init?: any): Promise<Response> => {
+    const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input?.url || '';
+    if (urlStr.includes('api.tavily.com')) {
+      return new Response(JSON.stringify({ error: 'Monthly quota exhausted' }), { status: 429 });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const quotaFailRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${validFbToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'What are the latest stock prices today?',
+          webSearch: true,
+        }),
+      }),
+      webAiEnv
+    );
+
+    const quotaFailJson: any = await quotaFailRes.json();
+    const quotaData = quotaFailJson.data?.webSearch || quotaFailJson.webSearch;
+    assert(quotaFailRes.status === 200, 'Search quota error degrades gracefully to 200 (does not crash inference)');
+    assert(quotaData?.triggered === true, 'Web search was triggered');
+    assert(quotaData?.sourcesCount === 0, 'No sources returned due to quota exhaustion');
+    assert(
+      Boolean(quotaData?.notice && quotaData.notice.includes('quota')),
+      'Graceful diagnostic notice returned in webSearch metadata'
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  // =========================================================================
+  // Section 14: Orbit 2.0 Modular Model Provider System
+  // =========================================================================
+  console.log('\n--- Section 14: Orbit 2.0 Modular Model Provider System ---');
+
+  // Test 14.1: Registry Provider Registration and Resolution
+  const mockAiForRegistry: any = {
+    run: async (_model: string, _options: any) => ({
+      response: 'Cloudflare Workers AI generated response.',
+    }),
+  };
+
+  const unitRegistry = new ModelProviderRegistry();
+  const cfProvider = new CloudflareWorkersAiProvider(mockAiForRegistry);
+  const openAiProvider = new OpenAiModelProvider('test-openai-key');
+  const geminiProvider = new GeminiModelProvider('test-gemini-key');
+  const anthropicProvider = new AnthropicModelProvider('test-anthropic-key');
+
+  unitRegistry.registerProvider(cfProvider, true);
+  unitRegistry.registerProvider(openAiProvider);
+  unitRegistry.registerProvider(geminiProvider);
+  unitRegistry.registerProvider(anthropicProvider);
+
+  assert(unitRegistry.resolveProvider().id === 'cloudflare', 'Default resolution resolves to Cloudflare');
+  assert(unitRegistry.resolveProvider('orbit-agent-v2').id === 'cloudflare', 'orbit-agent-v2 resolves to Cloudflare');
+  assert(unitRegistry.resolveProvider('@cf/meta/llama-3.1-8b-instruct-fast').id === 'cloudflare', '@cf/ resolves to Cloudflare');
+  assert(unitRegistry.resolveProvider('gpt-4o').id === 'openai', 'gpt-4o resolves to OpenAI');
+  assert(unitRegistry.resolveProvider('o3-mini').id === 'openai', 'o3-mini resolves to OpenAI');
+  assert(unitRegistry.resolveProvider('gemini-2.5-flash').id === 'gemini', 'gemini-2.5-flash resolves to Gemini');
+  assert(unitRegistry.resolveProvider('claude-3-7-sonnet').id === 'anthropic', 'claude-3-7-sonnet resolves to Anthropic');
+  assert(unitRegistry.resolveProvider('unknown-future-model').id === 'cloudflare', 'Unknown model falls back to default provider');
+
+  // Test 14.2: Provider Configuration State Verification
+  const unconfiguredOpenAi = new OpenAiModelProvider(undefined);
+  const unconfiguredGemini = new GeminiModelProvider('');
+  const unconfiguredAnthropic = new AnthropicModelProvider('   ');
+  const unconfiguredCf = new CloudflareWorkersAiProvider(undefined);
+
+  assert(!unconfiguredOpenAi.isConfigured(), 'OpenAI is unconfigured without API key');
+  assert(!unconfiguredGemini.isConfigured(), 'Gemini is unconfigured without API key');
+  assert(!unconfiguredAnthropic.isConfigured(), 'Anthropic is unconfigured without API key');
+  assert(!unconfiguredCf.isConfigured(), 'Cloudflare is unconfigured without AI binding');
+  assert(cfProvider.isConfigured(), 'Cloudflare is configured when AI binding present');
+  assert(openAiProvider.isConfigured(), 'OpenAI is configured when API key present');
+
+  // Test 14.3: Unconfigured Provider Fallback in Registry
+  const fallbackRegistry = new ModelProviderRegistry();
+  fallbackRegistry.registerProvider(cfProvider, true);
+  fallbackRegistry.registerProvider(unconfiguredOpenAi);
+
+  const fallbackExec = await fallbackRegistry.execute({
+    messages: [{ role: 'user', content: 'Test prompt' }],
+    modelId: 'gpt-4o',
+    allowFallback: true,
+  });
+
+  assert(fallbackExec.fallbackUsed === true, 'Fallback was marked as used when requesting unconfigured gpt-4o');
+  assert(fallbackExec.provider === 'cloudflare', 'Execution fell back to Cloudflare provider');
+  assert(fallbackExec.modelId === DEFAULT_CLOUDFLARE_MODEL, 'Execution fell back to default Cloudflare model');
+  assert(fallbackExec.text === 'Cloudflare Workers AI generated response.', 'Returned response from fallback provider');
+
+  // Test 14.4: Disallowed Fallback Throws PROVIDER_NOT_CONFIGURED
+  let threwExpected = false;
+  try {
+    await fallbackRegistry.execute({
+      messages: [{ role: 'user', content: 'Test prompt' }],
+      modelId: 'gpt-4o',
+      allowFallback: false,
+    });
+  } catch (err: unknown) {
+    if (err instanceof ModelProviderError) {
+      threwExpected = err.code === 'PROVIDER_NOT_CONFIGURED';
+    }
+  }
+  assert(threwExpected, 'Disallowed fallback throws PROVIDER_NOT_CONFIGURED error');
+
+  // Test 14.5: HTTP API Chat with Default Provider (Cloudflare)
+  const defaultModelRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: 'Check default model routing',
+        model: 'orbit-agent-v2',
+      }),
+    }),
+    webAiEnv
+  );
+  const defaultModelJson: any = await defaultModelRes.json();
+  const defaultData = defaultModelJson.data || defaultModelJson;
+  assert(defaultModelRes.status === 200, 'POST /api/v1/ai/chat with default model returns 200');
+  assert(defaultData.provider === 'cloudflare', 'Default execution provider is cloudflare');
+  assert(defaultData.model === DEFAULT_CLOUDFLARE_MODEL, 'Default execution model is Llama 3.1 8B');
+  assert(defaultData.fallbackUsed === false, 'No fallback needed for default model');
+
+  // Test 14.6: HTTP API Chat with Unconfigured Provider and allowFallback: true
+  const fallbackApiRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: 'Check unconfigured model graceful fallback',
+        model: 'gpt-4o',
+        allowFallback: true,
+      }),
+    }),
+    webAiEnv // lacks OPENAI_API_KEY
+  );
+  const fallbackApiJson: any = await fallbackApiRes.json();
+  const fallbackApiData = fallbackApiJson.data || fallbackApiJson;
+  assert(fallbackApiRes.status === 200, 'Unconfigured provider with allowFallback returns 200');
+  assert(fallbackApiData.fallbackUsed === true, 'fallbackUsed flag is true in API response');
+  assert(fallbackApiData.provider === 'cloudflare', 'Fell back to cloudflare in API response');
+
+  // Test 14.7: HTTP API Chat with Unconfigured Provider and allowFallback: false
+  const strictUnconfiguredRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: 'Check strict error when unconfigured',
+        model: 'claude-3-7-sonnet',
+        allowFallback: false,
+      }),
+    }),
+    webAiEnv // lacks ANTHROPIC_API_KEY
+  );
+  const strictUnconfiguredJson: any = await strictUnconfiguredRes.json();
+  assert(strictUnconfiguredRes.status === 503, 'Unconfigured provider with allowFallback: false returns 503');
+  assert(strictUnconfiguredJson.error?.code === 'PROVIDER_NOT_CONFIGURED', 'Error code is PROVIDER_NOT_CONFIGURED');
+  assert(strictUnconfiguredJson.error?.details?.provider === 'anthropic', 'Error details specify anthropic provider');
+
+  // Test 14.8: Live External Provider Execution when Configured (OpenAI)
+  const openAiEnv: Env = {
+    ...webAiEnv,
+    OPENAI_API_KEY: 'sk-test-mock-openai-key-valid',
+  };
+
+  globalThis.fetch = async (input: any, init?: any): Promise<Response> => {
+    const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input?.url || '';
+    if (urlStr.includes('api.openai.com/v1/chat/completions')) {
+      const authHeader = init?.headers?.Authorization || init?.headers?.authorization;
+      if (authHeader !== 'Bearer sk-test-mock-openai-key-valid') {
+        return new Response(JSON.stringify({ error: { message: 'Invalid API key' } }), { status: 401 });
+      }
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: 'Response from OpenAI GPT-4o adapter.' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 15, completion_tokens: 8, total_tokens: 23 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const liveOpenAiRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${validFbToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'Hello GPT-4o',
+          model: 'gpt-4o',
+        }),
+      }),
+      openAiEnv
+    );
+    const liveOpenAiJson: any = await liveOpenAiRes.json();
+    const liveData = liveOpenAiJson.data || liveOpenAiJson;
+    assert(liveOpenAiRes.status === 200, 'POST /api/v1/ai/chat with configured OpenAI returns 200');
+    assert(liveData.provider === 'openai', 'Provider in response is openai');
+    assert(liveData.model === 'gpt-4o', 'Model in response is gpt-4o');
+    assert(liveData.response === 'Response from OpenAI GPT-4o adapter.', 'Received OpenAI response text');
+    assert(liveData.fallbackUsed === false, 'fallbackUsed is false for configured provider');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  // Test 14.9: Live External Provider Execution when Configured (Anthropic Claude)
+  const anthropicEnv: Env = {
+    ...webAiEnv,
+    ANTHROPIC_API_KEY: 'sk-ant-test-mock-key-valid',
+  };
+
+  globalThis.fetch = async (input: any, init?: any): Promise<Response> => {
+    const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input?.url || '';
+    if (urlStr.includes('api.anthropic.com/v1/messages')) {
+      const apiKeyHeader = init?.headers?.['x-api-key'];
+      if (apiKeyHeader !== 'sk-ant-test-mock-key-valid') {
+        return new Response(JSON.stringify({ error: { message: 'Invalid API key' } }), { status: 401 });
+      }
+      return new Response(
+        JSON.stringify({
+          content: [{ type: 'text', text: 'Response from Anthropic Claude adapter.' }],
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 18, output_tokens: 9 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const liveAnthropicRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${validFbToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'Hello Claude',
+          model: 'claude-3-7-sonnet',
+        }),
+      }),
+      anthropicEnv
+    );
+    const liveAnthropicJson: any = await liveAnthropicRes.json();
+    const liveAnthropicData = liveAnthropicJson.data || liveAnthropicJson;
+    assert(liveAnthropicRes.status === 200, 'POST /api/v1/ai/chat with configured Anthropic returns 200');
+    assert(liveAnthropicData.provider === 'anthropic', 'Provider in response is anthropic');
+    assert(liveAnthropicData.model === 'claude-3-7-sonnet', 'Model in response is claude-3-7-sonnet');
+    assert(liveAnthropicData.response === 'Response from Anthropic Claude adapter.', 'Received Anthropic response text');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  // Test 14.10: Live External Provider Execution when Configured (Google Gemini)
+  const geminiEnv: Env = {
+    ...webAiEnv,
+    GEMINI_API_KEY: 'AIzaSy-test-gemini-key',
+  };
+
+  globalThis.fetch = async (input: any, init?: any): Promise<Response> => {
+    const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input?.url || '';
+    if (urlStr.includes('generativelanguage.googleapis.com')) {
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: { parts: [{ text: 'Response from Google Gemini adapter.' }] },
+              finishReason: 'STOP',
+            },
+          ],
+          usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 7, totalTokenCount: 19 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const liveGeminiRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${validFbToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'Hello Gemini',
+          model: 'gemini-2.5-flash',
+        }),
+      }),
+      geminiEnv
+    );
+    const liveGeminiJson: any = await liveGeminiRes.json();
+    const liveGeminiData = liveGeminiJson.data || liveGeminiJson;
+    assert(liveGeminiRes.status === 200, 'POST /api/v1/ai/chat with configured Gemini returns 200');
+    assert(liveGeminiData.provider === 'gemini', 'Provider in response is gemini');
+    assert(liveGeminiData.model === 'gemini-2.5-flash', 'Model in response is gemini-2.5-flash');
+    assert(liveGeminiData.response === 'Response from Google Gemini adapter.', 'Received Gemini response text');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  // Test 14.11: External Provider Failure Seamlessly Falls Back to Cloudflare
+  globalThis.fetch = async (input: any, init?: any): Promise<Response> => {
+    const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input?.url || '';
+    if (urlStr.includes('api.openai.com')) {
+      return new Response(JSON.stringify({ error: { message: 'OpenAI internal upstream error' } }), { status: 500 });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const failOpenAiRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${validFbToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'Test resilient fallback on provider 500 error',
+          model: 'gpt-4o',
+          allowFallback: true,
+        }),
+      }),
+      openAiEnv
+    );
+    const failOpenAiJson: any = await failOpenAiRes.json();
+    const failData = failOpenAiJson.data || failOpenAiJson;
+    assert(failOpenAiRes.status === 200, 'Provider 500 error seamlessly falls back to 200 via Cloudflare Workers AI');
+    assert(failData.fallbackUsed === true, 'fallbackUsed is true after primary provider failure');
+    assert(failData.provider === 'cloudflare', 'Provider is cloudflare after fallback');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 
   console.log(`\n========================================`);
   console.log(`All Tests Finished: ${passed} Passed, ${failed} Failed`);

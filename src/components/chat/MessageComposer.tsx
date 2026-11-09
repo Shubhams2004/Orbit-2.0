@@ -8,6 +8,7 @@ import {
   FileCode,
   FileText,
   Sparkles,
+  Globe,
 } from 'lucide-react';
 
 interface MessageComposerProps {
@@ -16,6 +17,8 @@ interface MessageComposerProps {
   isStreaming: boolean;
   disabled?: boolean;
   placeholder?: string;
+  isWebSearchActive?: boolean;
+  onToggleWebSearch?: () => void;
 }
 
 export const MessageComposer: React.FC<MessageComposerProps> = ({
@@ -24,6 +27,8 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   isStreaming,
   disabled = false,
   placeholder = 'Message Orbit...',
+  isWebSearchActive = false,
+  onToggleWebSearch,
 }) => {
   const [content, setContent] = useState('');
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
@@ -142,7 +147,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
 
         {/* Bottom Control Bar */}
         <div className="mt-2 flex items-center justify-between pt-1">
-          {/* Left Actions (Attachment) */}
+          {/* Left Actions (Attachment & Web Search Toggle) */}
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -152,6 +157,23 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
             >
               <Paperclip className="w-4 h-4" />
             </button>
+
+            {/* Web Search Mode Toggle */}
+            {onToggleWebSearch && (
+              <button
+                type="button"
+                onClick={onToggleWebSearch}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                  isWebSearchActive
+                    ? 'bg-indigo-600 text-white shadow-xs dark:bg-indigo-500'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-neutral-400 dark:hover:text-neutral-200 dark:hover:bg-neutral-800'
+                }`}
+                title={isWebSearchActive ? 'Web Search: Active (Live intelligence enabled)' : 'Enable Web Search (Search live internet)'}
+              >
+                <Globe className={`w-3.5 h-3.5 ${isWebSearchActive ? 'text-white' : 'text-slate-500 dark:text-neutral-400'}`} />
+                <span className="text-[11px] hidden sm:inline">Search</span>
+              </button>
+            )}
           </div>
 
           {/* Right Action: Send / Stop Circular Button */}

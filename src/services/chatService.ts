@@ -8,6 +8,7 @@ export interface SendMessageOptions {
   content: string;
   modelId: string;
   attachments?: ChatAttachment[];
+  webSearch?: boolean;
   onChunk?: (accumulatedContent: string) => void;
   signal?: AbortSignal;
   tasksContext?: Task[];
@@ -278,6 +279,7 @@ export class MockChatService implements IChatService {
     let activeModelName = modelId;
     let proposedActions: AgentAction[] | undefined;
     let isSimulated = false;
+    let webSearchMeta: any = undefined;
 
     try {
       const aiResult = await apiClient.post<{
@@ -285,15 +287,21 @@ export class MockChatService implements IChatService {
         conversationId: string;
         messageId: string;
         model: string;
+        provider?: string;
+        fallbackUsed?: boolean;
+        webSearch?: any;
       }>('/api/v1/ai/chat', {
         prompt: content,
         conversationId: apiConversationId,
+        model: modelId,
+        webSearch: options.webSearch,
       });
 
       if (aiResult && aiResult.response) {
         fullText = aiResult.response;
         assistantMsgId = aiResult.messageId || assistantMsgId;
         activeModelName = aiResult.model || modelId;
+        webSearchMeta = aiResult.webSearch;
 
         // When the server creates a new conversation, update the target conversation ID
         if (aiResult.conversationId) {
@@ -378,6 +386,7 @@ export class MockChatService implements IChatService {
       timestamp: new Date().toISOString(),
       modelUsed: activeModelName,
       actions: proposedActions,
+      webSearch: webSearchMeta,
       status: 'streaming',
       isSimulated,
     };

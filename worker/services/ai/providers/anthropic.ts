@@ -1,0 +1,107 @@
+import { IModelProvider, ModelExecutionOptions, ModelExecutionResult, ModelProviderError } from '../types';
+
+export class AnthropicModelProvider implements IModelProvider {
+  readonly id = 'anthropic';
+  readonly name = 'Anthropic Claude';
+  private apiKey?: string;
+  private baseUrl: string;
+
+  constructor(apiKey?: string, baseUrl: string = 'https://api.anthropic.com/v1') {
+    this.apiKey = apiKey;
+    this.baseUrl = baseUrl;
+  }
+
+  isConfigured(): boolean {
+    return Boolean(this.apiKey && this.apiKey.trim().length > 0);
+  }
+
+  supportsModel(modelId: string): boolean {
+    return modelId.startsWith('claude-') || modelId.includes('anthropic');
+  }
+
+  async execute(options: ModelExecutionOptions): Promise<ModelExecutionResult> {
+    if (!this.isConfigured()) {
+      throw new ModelProviderError(
+        'Anthropic API key is not configured on this Worker. Please configure ANTHROPIC_API_KEY in Worker environment variables.',
+        {
+          code: 'PROVIDER_NOT_CONFIGURED',
+          provider: this.id,
+          statusCode: 503,
+          isRetryable: false,
+        }
+      );
+    }
+
+    const targetModel = options.modelId || 'claude-3-7-sonnet-20250219';
+
+    // Separate system messages
+    const systemMessages = options.messages.filter((m) => m.role === 'system');
+    const conversationMessages = options.messages.filter((m) => m.role !== 'system');
+
+    const systemPrompt = systemMessages.map((m) => m.content).join('\n\n');
+
+    const messages = conversationMessages.map((msg) => ({
+      role: msg.role === 'assistant' ? 'assistant' : 'user',
+      content: msg.content,
+    }));
+
+    const body: Record<string, any> = {
+      model: targetModel,
+      messages,
+      max_tokens: options.maxTokens || 1024,
+      temperature: options.temperature ?? 0.7,
+    };
+
+    if (systemPrompt) {
+      body.system = systemPrompt;
+    }
+
+    const response = await fetch(`${this.baseUrl}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': this.apiKey!,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(body),
+      signal: options.signal,
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let parsedMessage = `Anthropic API returned HTTP ${response.status}`;
+      try {
+        const errJson = JSON.parse(errText);
+        if (errJson?.error?.message) {
+          parsedMessage = errJson.error.message;
+        }
+      } catch {}
+
+      throw new ModelProviderError(`Anthropic provider error: ${parsedMessage}`, {
+        code: response.status === 401 ? 'AUTHENTICATION_FAILED' : 'PROVIDER_ERROR',
+        provider: this.id,
+        statusCode: response.status >= 500 ? 502 : response.status,
+        isRetryable: response.status >= 500 || response.status === 429,
+      });
+    }
+
+    const data: any = await response.json();
+    const textContent =
+      data?.content
+        ?.filter((c: any) => c.type === 'text')
+        .map((c: any) => c.text)
+        .join('') || '';
+
+    return {
+      text: textContent.trim(),
+      provider: this.id,
+      modelId: targetModel,
+      finishReason: data?.stop_reason,
+      usage: {
+        promptTokens: data?.usage?.input_tokens,
+        completionTokens: data?.usage?.output_tokens,
+        totalTokens: (data?.usage?.input_tokens || 0) + (data?.usage?.output_tokens || 0),
+      },
+    };
+  }
+}

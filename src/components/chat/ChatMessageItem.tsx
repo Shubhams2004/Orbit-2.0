@@ -15,6 +15,8 @@ import {
   ThumbsUp,
   ThumbsDown,
   Share2,
+  Globe,
+  ExternalLink,
 } from 'lucide-react';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
@@ -95,12 +97,25 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
 
           {/* Message Content Body */}
           <div className="flex-1 min-w-0 space-y-3">
-            {/* Model Tag & Timestamp (Subtle Top Row) */}
-            <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-neutral-400 font-sans">
+            {/* Model Tag, Web Intelligence Indicator & Timestamp (Subtle Top Row) */}
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-neutral-400 font-sans">
               <span className="font-semibold text-slate-900 dark:text-neutral-200">Orbit</span>
               {message.modelUsed && (
                 <span className="text-[10px] text-slate-600 dark:text-neutral-400 font-mono bg-slate-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded border border-slate-200 dark:border-neutral-800">
                   {message.modelUsed}
+                </span>
+              )}
+              {message.webSearch?.triggered && (
+                <span className="inline-flex items-center gap-1 text-[10px] text-indigo-600 dark:text-indigo-400 font-medium bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800/60 shadow-2xs">
+                  <Globe className="w-3 h-3" />
+                  <span>
+                    {message.webSearch.sourcesCount > 0
+                      ? `Web Verified (${message.webSearch.sourcesCount} sources)`
+                      : 'Live Search'}
+                  </span>
+                  {message.webSearch.cached && (
+                    <span className="text-[9px] text-slate-400 dark:text-neutral-500 font-mono">· cached</span>
+                  )}
                 </span>
               )}
               <span className="text-slate-400 dark:text-neutral-600">·</span>
@@ -119,6 +134,45 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
                 isStreaming={isStreaming}
               />
             </div>
+
+            {/* Grounded Web Evidence Sources (Inspiration PDF tactile glass cards) */}
+            {message.webSearch && message.webSearch.sources && message.webSearch.sources.length > 0 && (
+              <div className="pt-2 border-t border-slate-200/60 dark:border-neutral-800/60">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-neutral-300 mb-2">
+                  <Globe className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>Grounded Sources ({message.webSearch.sources.length})</span>
+                  {message.webSearch.retrievedAt && (
+                    <span className="text-[10px] text-slate-400 dark:text-neutral-500 font-mono font-normal">
+                      · {new Date(message.webSearch.retrievedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {message.webSearch.sources.map((src, idx) => (
+                    <a
+                      key={src.url + idx}
+                      href={src.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="glass-panel p-2.5 rounded-xl border border-slate-200/80 dark:border-neutral-800 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all group flex items-start gap-2 shadow-2xs"
+                    >
+                      <div className="w-5 h-5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-mono text-[10px] font-bold shrink-0 mt-0.5">
+                        {idx + 1}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-medium text-slate-800 dark:text-neutral-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
+                          {src.title}
+                        </div>
+                        <div className="text-[10px] text-slate-400 dark:text-neutral-500 truncate mt-0.5">
+                          {src.url.replace(/^https?:\/\//, '')}
+                        </div>
+                      </div>
+                      <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-slate-600 dark:text-neutral-500 dark:group-hover:text-neutral-300 shrink-0 mt-1" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Error / Stopped State */}
             {isError && (

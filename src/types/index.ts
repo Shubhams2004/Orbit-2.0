@@ -124,6 +124,21 @@ export interface ChatAttachment {
   contentSnippet?: string;
 }
 
+export interface WebSearchSource {
+  title: string;
+  url: string;
+  publishedDate?: string;
+}
+
+export interface WebSearchMetadata {
+  triggered: boolean;
+  sourcesCount: number;
+  sources: WebSearchSource[];
+  retrievedAt?: string | null;
+  cached?: boolean;
+  notice?: string | null;
+}
+
 export interface ChatMessage {
   id: string;
   conversationId: string;
@@ -133,6 +148,7 @@ export interface ChatMessage {
   modelUsed?: string;
   attachments?: ChatAttachment[];
   actions?: AgentAction[];
+  webSearch?: WebSearchMetadata;
   status?: 'streaming' | 'complete' | 'error' | 'stopped';
   errorMessage?: string;
   isSimulated?: boolean;

@@ -155,11 +155,13 @@ interface WorkspaceContextType {
   createNewConversation: (title?: string, modelId?: string) => Promise<Conversation>;
   renameConversation: (id: string, newTitle: string) => Promise<void>;
   deleteConversation: (id: string) => Promise<void>;
-  sendChatMessage: (content: string, attachments?: ChatAttachment[]) => Promise<void>;
+  sendChatMessage: (content: string, attachments?: ChatAttachment[], webSearch?: boolean) => Promise<void>;
   stopChatGeneration: () => void;
   regenerateMessage: (messageId: string) => Promise<void>;
   approveChatAction: (actionId: string) => void;
   rejectChatAction: (actionId: string) => void;
+  isWebSearchActive: boolean;
+  setWebSearchActive: (active: boolean | ((prev: boolean) => boolean)) => void;
 
   // UI Dialogs
   isQuickCreateOpen: boolean;
@@ -411,6 +413,8 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [activeConversationId, setActiveConversationId] = useState<string>('');
 
   const [selectedModelId, setSelectedModelId] = useState<string>('orbit-agent-v2');
+
+  const [isWebSearchActive, setWebSearchActive] = useState<boolean>(false);
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatStreaming, setIsChatStreaming] = useState(false);
@@ -927,10 +931,14 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const sendChatMessage = async (
     content: string,
-    attachments: ChatAttachment[] = []
+    attachments: ChatAttachment[] = [],
+    webSearch?: boolean
   ) => {
     if (!content.trim() && attachments.length === 0) return;
     if (isChatStreaming) return;
+
+    // Use explicit parameter if passed, otherwise use current toggle state
+    const effectiveWebSearch = webSearch !== undefined ? webSearch : isWebSearchActive;
 
     // Require authentication before sending chat requests
     // In production, an authenticated Firebase user is required.
@@ -990,6 +998,7 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
         content,
         modelId: selectedModelId,
         attachments,
+        webSearch: effectiveWebSearch,
         signal: abortController.signal,
         tasksContext: tasks,
         projectsContext: projects,
@@ -1263,6 +1272,8 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
         regenerateMessage,
         approveChatAction,
         rejectChatAction,
+        isWebSearchActive,
+        setWebSearchActive,
         // UI
         isQuickCreateOpen,
         quickCreateInitialType,

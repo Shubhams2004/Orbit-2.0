@@ -47,6 +47,8 @@ export const ChatTerminalView: React.FC = () => {
     approveChatAction,
     rejectChatAction,
     showConfirmDialog,
+    isWebSearchActive,
+    setWebSearchActive,
   } = useWorkspace();
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -238,7 +240,8 @@ export const ChatTerminalView: React.FC = () => {
               {/* Quick Mode / Capabilities Pills (Inspiration PDF Page 13 & Page 2) */}
               <div className="flex flex-wrap items-center justify-center gap-2 mb-7">
                 {[
-                  { label: 'Deeper Research', icon: Search, prompt: 'Perform a deep dive research on edge database performance.' },
+                  { label: 'Live Web Search', icon: Search, prompt: 'What are the latest Cloudflare Workers and serverless AI releases in 2026?', forceWeb: true },
+                  { label: 'Deeper Research', icon: Search, prompt: 'Perform a deep dive research on edge database performance and ACID transactions.' },
                   { label: 'Creative Brainstorm', icon: Wand2, prompt: 'Brainstorm 5 innovative feature additions for a SaaS productivity tool.' },
                   { label: 'Synthesize Data', icon: Brain, prompt: 'Synthesize my active workspace workload and summarize key bottlenecks.' },
                   { label: 'Check Compliance', icon: CheckCheck, prompt: 'Audit SOC 2 Type II controls and generate an audit checklist.' },
@@ -248,7 +251,10 @@ export const ChatTerminalView: React.FC = () => {
                     <button
                       key={pill.label}
                       type="button"
-                      onClick={() => sendChatMessage(pill.prompt)}
+                      onClick={() => {
+                        if (pill.forceWeb) setWebSearchActive(true);
+                        sendChatMessage(pill.prompt, [], pill.forceWeb);
+                      }}
                       className="glass-pill px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 hover:text-slate-900 dark:text-neutral-300 dark:hover:text-white flex items-center gap-1.5 hover:scale-[1.03] transition-all cursor-pointer shadow-2xs"
                     >
                       <Icon className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
@@ -307,6 +313,8 @@ export const ChatTerminalView: React.FC = () => {
             onSendMessage={sendChatMessage}
             onStopGeneration={stopChatGeneration}
             isStreaming={isChatStreaming}
+            isWebSearchActive={isWebSearchActive}
+            onToggleWebSearch={() => setWebSearchActive((prev) => !prev)}
           />
         </div>
       </div>
