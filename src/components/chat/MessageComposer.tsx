@@ -124,10 +124,10 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
         </div>
       )}
 
-      {/* Floating ChatGPT / Claude Capsule Composer */}
+      {/* Floating Glass Capsule Composer (Inspiration PDF Pages 2, 5, 6, 13) */}
       <form
         onSubmit={handleSubmit}
-        className="bg-white border border-slate-300/90 dark:bg-[#212121] dark:border-neutral-750/80 rounded-3xl p-2.5 sm:p-3 shadow-lg dark:shadow-xl focus-within:border-indigo-500 dark:focus-within:border-neutral-500 transition-all flex flex-col"
+        className="glass-input rounded-3xl p-3 sm:p-3.5 shadow-xl hover:shadow-2xl focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500/80 transition-all flex flex-col"
       >
         <textarea
           ref={textareaRef}
@@ -160,7 +160,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
               <button
                 type="button"
                 onClick={onStopGeneration}
-                className="w-8 h-8 rounded-full bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 flex items-center justify-center transition-all shadow-xs cursor-pointer"
+                className="w-8 h-8 rounded-full bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 flex items-center justify-center transition-all shadow-md cursor-pointer hover:scale-105 active:scale-95"
                 title="Stop generating"
               >
                 <Square className="w-3.5 h-3.5 fill-white dark:fill-black" />
@@ -169,9 +169,9 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
               <button
                 type="submit"
                 disabled={!hasValidInput || disabled}
-                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-xs ${
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-md ${
                   hasValidInput && !disabled
-                    ? 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 cursor-pointer'
+                    ? 'bg-indigo-600 text-white hover:bg-indigo-500 dark:bg-white dark:text-black dark:hover:bg-neutral-200 cursor-pointer hover:scale-105 active:scale-95'
                     : 'bg-slate-200 text-slate-400 dark:bg-neutral-800 dark:text-neutral-500 cursor-not-allowed opacity-60'
                 }`}
                 title="Send message (Enter)"

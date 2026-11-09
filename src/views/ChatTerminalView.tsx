@@ -4,6 +4,7 @@ import { ChatSidebar } from '../components/chat/ChatSidebar';
 import { ModelSelector } from '../components/chat/ModelSelector';
 import { ChatMessageItem } from '../components/chat/ChatMessageItem';
 import { MessageComposer } from '../components/chat/MessageComposer';
+import { AiOrb } from '../components/common/AiOrb';
 import {
   Sparkles,
   Bot,
@@ -20,10 +21,15 @@ import {
   Compass,
   Code2,
   ListTodo,
+  Wand2,
+  Brain,
+  Search,
+  CheckCheck,
 } from 'lucide-react';
 
 export const ChatTerminalView: React.FC = () => {
   const {
+    user,
     conversations,
     activeConversationId,
     activeConversation,
@@ -94,7 +100,7 @@ export const ChatTerminalView: React.FC = () => {
   ];
 
   return (
-    <div className="flex h-[calc(100vh-6rem)] rounded-2xl border border-slate-200 dark:border-neutral-800/80 bg-white dark:bg-neutral-950 overflow-hidden shadow-2xl">
+    <div className="flex h-full rounded-2xl md:rounded-3xl border border-slate-200/90 dark:border-white/10 bg-white/70 dark:bg-neutral-950/70 overflow-hidden shadow-2xl backdrop-blur-xl">
       {/* Desktop Conversation History Sidebar */}
       <div className="hidden md:block shrink-0 h-full">
         <ChatSidebar
@@ -137,10 +143,10 @@ export const ChatTerminalView: React.FC = () => {
         </div>
       )}
 
-      {/* Main Chat Canvas (ChatGPT / Claude Style) */}
-      <div className="flex-1 flex flex-col min-w-0 h-full bg-slate-50/50 dark:bg-[#171717] relative">
+      {/* Main Chat Canvas (Inspiration PDF Cortex AI & ChatGPT/Claude Style) */}
+      <div className="flex-1 flex flex-col min-w-0 h-full bg-slate-50/40 dark:bg-[#121214]/60 relative">
         {/* Top Minimalist Header */}
-        <div className="h-14 px-4 sm:px-6 flex items-center justify-between border-b border-slate-200 dark:border-neutral-800/60 bg-white/90 dark:bg-[#171717]/90 backdrop-blur-md shrink-0 z-10">
+        <div className="h-14 px-4 sm:px-6 flex items-center justify-between border-b border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-neutral-900/50 backdrop-blur-md shrink-0 z-10">
           <div className="flex items-center gap-2.5 min-w-0">
             {/* Mobile History Toggle */}
             <button
@@ -213,21 +219,47 @@ export const ChatTerminalView: React.FC = () => {
         {/* Message Stream Area */}
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-6">
           {chatMessages.length === 0 ? (
-            /* Claude / ChatGPT Signature Empty State */
-            <div className="h-full flex flex-col items-center justify-center text-center max-w-2xl mx-auto py-12 animate-in fade-in">
-              <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 text-indigo-600 dark:bg-neutral-900 dark:border-neutral-750 dark:text-indigo-400 flex items-center justify-center shadow-md mb-4">
-                <Sparkles className="w-6 h-6 text-violet-600 dark:text-violet-400" />
+            /* Cortex / Prospectory Luminous AI Canvas (Inspiration PDF Pages 3, 5, 12, 13) */
+            <div className="min-h-full flex flex-col items-center justify-center text-center max-w-2xl mx-auto py-8 animate-in fade-in">
+              <AiOrb size="lg" isThinking={isChatStreaming} className="mb-5" />
+
+              <div className="space-y-1.5 mb-5">
+                <span className="text-xs font-semibold tracking-wider uppercase text-indigo-600 dark:text-indigo-400">
+                  {user.name ? `Hello, ${user.name}` : 'Welcome Creator'}
+                </span>
+                <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-neutral-100 tracking-tight">
+                  How can I assist your workspace today?
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-500 dark:text-neutral-400 max-w-md mx-auto leading-relaxed">
+                  Plan complex milestones, audit security compliance, or let Orbit formulate autonomous task executions.
+                </p>
               </div>
 
-              <h2 className="text-2xl sm:text-3xl font-semibold text-slate-900 dark:text-neutral-100 tracking-tight font-sans">
-                Where should we begin?
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-600 dark:text-neutral-400 mt-2 max-w-md leading-relaxed font-sans">
-                Ask Orbit to structure a project roadmap, triage pending tasks, or brainstorm architecture solutions.
-              </p>
+              {/* Quick Mode / Capabilities Pills (Inspiration PDF Page 13 & Page 2) */}
+              <div className="flex flex-wrap items-center justify-center gap-2 mb-7">
+                {[
+                  { label: 'Deeper Research', icon: Search, prompt: 'Perform a deep dive research on edge database performance.' },
+                  { label: 'Creative Brainstorm', icon: Wand2, prompt: 'Brainstorm 5 innovative feature additions for a SaaS productivity tool.' },
+                  { label: 'Synthesize Data', icon: Brain, prompt: 'Synthesize my active workspace workload and summarize key bottlenecks.' },
+                  { label: 'Check Compliance', icon: CheckCheck, prompt: 'Audit SOC 2 Type II controls and generate an audit checklist.' },
+                ].map((pill) => {
+                  const Icon = pill.icon;
+                  return (
+                    <button
+                      key={pill.label}
+                      type="button"
+                      onClick={() => sendChatMessage(pill.prompt)}
+                      className="glass-pill px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 hover:text-slate-900 dark:text-neutral-300 dark:hover:text-white flex items-center gap-1.5 hover:scale-[1.03] transition-all cursor-pointer shadow-2xs"
+                    >
+                      <Icon className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      <span>{pill.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
 
-              {/* Clean Suggestion Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-8 w-full text-left">
+              {/* Clean Frosted Glass Suggestion Cards (Inspiration PDF Page 2 & 13) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full text-left">
                 {promptSuggestions.map((item) => {
                   const Icon = item.icon;
                   return (
@@ -235,15 +267,17 @@ export const ChatTerminalView: React.FC = () => {
                       key={item.title}
                       type="button"
                       onClick={() => sendChatMessage(item.title)}
-                      className="p-4 rounded-2xl bg-white hover:bg-slate-100/80 border border-slate-200 hover:border-slate-300 dark:bg-neutral-900/60 dark:hover:bg-neutral-850 dark:border-neutral-800 dark:hover:border-neutral-700 text-xs transition-all group cursor-pointer shadow-2xs text-left"
+                      className="glass-panel p-4 rounded-2xl text-xs transition-all hover:scale-[1.01] hover:border-indigo-400/60 dark:hover:border-indigo-500/40 group cursor-pointer text-left shadow-2xs"
                     >
                       <div className="flex items-center gap-2 mb-1.5">
-                        <Icon className="w-4 h-4 text-indigo-600 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors" />
+                        <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/60 dark:border-indigo-800/60 flex items-center justify-center shrink-0">
+                          <Icon className="w-4 h-4 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform" />
+                        </div>
                         <span className="font-semibold text-slate-800 group-hover:text-slate-900 dark:text-neutral-200 dark:group-hover:text-white transition-colors">
                           {item.title}
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-500 dark:text-neutral-400 leading-relaxed">
+                      <div className="text-[11px] text-slate-500 dark:text-neutral-400 leading-relaxed pl-9">
                         {item.subtitle}
                       </div>
                     </button>

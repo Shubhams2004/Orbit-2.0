@@ -105,11 +105,11 @@ export const OverviewView: React.FC = () => {
       </div>
 
       {/* Prominent AI Assistant Command Center Entry */}
-      <div className="bg-slate-100/90 border border-slate-200 dark:bg-neutral-900/90 dark:border-neutral-800 rounded-xl p-4 sm:p-5 shadow-xs">
-        <div className="flex items-center gap-2 text-xs font-medium text-violet-600 dark:text-violet-400 mb-2">
-          <Sparkles className="w-4 h-4" />
-          <span>Orbit AI Command Center</span>
-          <span className="text-slate-400 dark:text-neutral-500 text-[11px]">· Simulated Local Agent</span>
+      <div className="glass-panel rounded-2xl p-4 sm:p-5 shadow-sm border border-white/20 dark:border-white/10">
+        <div className="flex items-center gap-2 text-xs font-medium text-violet-600 dark:text-violet-400 mb-2.5">
+          <Sparkles className="w-4 h-4 animate-pulse" />
+          <span className="font-semibold tracking-tight">Orbit AI Command Center</span>
+          <span className="text-slate-400 dark:text-neutral-500 text-[11px]">· Meta Llama 3.1 8B Fast</span>
         </div>
 
         <form onSubmit={handleAiSubmit} className="flex items-center gap-2">
@@ -119,12 +119,12 @@ export const OverviewView: React.FC = () => {
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
               placeholder="Ask Orbit to plan your day, audit overdue items, or decompose a project..."
-              className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white border border-slate-200 dark:bg-neutral-950 dark:border-neutral-800 rounded-lg text-slate-900 placeholder-slate-400 dark:text-neutral-100 dark:placeholder-neutral-500 focus:outline-hidden focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-colors shadow-2xs"
+              className="w-full px-4 py-2.5 text-xs sm:text-sm glass-input rounded-xl text-slate-900 placeholder-slate-400 dark:text-neutral-100 dark:placeholder-neutral-500 focus:outline-hidden focus:ring-1 focus:ring-violet-500/50 transition-all shadow-inner"
             />
           </div>
           <button
             type="submit"
-            className="px-4 py-2.5 text-xs font-medium text-white bg-violet-600 hover:bg-violet-500 rounded-lg transition-colors flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
+            className="px-4 py-2.5 text-xs font-medium text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 rounded-xl transition-all flex items-center gap-1.5 shrink-0 shadow-md shadow-violet-500/20 active:scale-95 cursor-pointer"
           >
             <Bot className="w-3.5 h-3.5" />
             <span>Engage Agent</span>
@@ -132,7 +132,7 @@ export const OverviewView: React.FC = () => {
         </form>
 
         {/* Quick Suggestion Chips */}
-        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+        <div className="mt-3.5 flex flex-wrap items-center gap-1.5 text-xs">
           <span className="text-[11px] text-slate-500 dark:text-neutral-500 mr-1">Suggested:</span>
           {[
             'Plan my day.',
@@ -144,7 +144,7 @@ export const OverviewView: React.FC = () => {
               key={prompt}
               type="button"
               onClick={() => runQuickPrompt(prompt)}
-              className="px-2.5 py-1 text-[11px] text-slate-700 bg-white hover:bg-slate-200/80 border border-slate-200 dark:border-transparent dark:text-neutral-300 dark:bg-neutral-800/80 dark:hover:bg-neutral-800 dark:hover:text-white rounded-md transition-colors shadow-2xs"
+              className="px-3 py-1 text-[11px] text-slate-700 dark:text-neutral-300 glass-pill rounded-lg transition-all shadow-2xs hover:text-indigo-600 dark:hover:text-indigo-300 cursor-pointer active:scale-95"
             >
               {prompt}
             </button>

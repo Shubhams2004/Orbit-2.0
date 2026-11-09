@@ -8,6 +8,7 @@ import { registerTestPublicKey, clearKeyCaches } from '../worker/utils/firebase-
 import { isDevToken, ApiClient } from '../src/services/apiClient';
 import { isDemoConversationId, DEMO_CONVERSATION_IDS } from '../src/services/conversationService';
 import { formatFirebaseAuthError } from '../src/lib/firebase';
+import { parsePath, routeToPath } from '../src/context/WorkspaceContext';
 
 async function signRs256Jwt(
   header: Record<string, unknown>,
@@ -1318,6 +1319,73 @@ async function runTests() {
   );
 
   clearKeyCaches();
+
+  // 12. Testing Frontend URL Synchronization, Route Parsing, and Path Generation:
+  console.log('\n12. Testing Frontend URL Synchronization, Route Parsing, and Path Generation:');
+  
+  // Landing page route parsing
+  const landingRouteRoot = parsePath('/');
+  assert(landingRouteRoot?.page === 'landing' && landingRouteRoot.projectId === null, 'Root path "/" parses to landing page');
+  
+  const landingRouteNamed = parsePath('/landing');
+  assert(landingRouteNamed?.page === 'landing', 'Path "/landing" parses to landing page');
+
+  // Overview / Dashboard route parsing
+  const overviewRoute = parsePath('/overview');
+  assert(overviewRoute?.page === 'overview', 'Path "/overview" parses to overview page');
+
+  const dashboardRoute = parsePath('/dashboard');
+  assert(dashboardRoute?.page === 'overview', 'Alias "/dashboard" parses to overview page');
+
+  // Tasks route parsing
+  const tasksRoute = parsePath('/tasks');
+  assert(tasksRoute?.page === 'tasks', 'Path "/tasks" parses to tasks page');
+
+  const tasksTrailingSlash = parsePath('/tasks/');
+  assert(tasksTrailingSlash?.page === 'tasks', 'Path "/tasks/" with trailing slash parses to tasks page');
+
+  // Projects route parsing
+  const projectsRoute = parsePath('/projects');
+  assert(projectsRoute?.page === 'projects', 'Path "/projects" parses to projects page');
+
+  // Project Detail deep link parsing
+  const projectDetailRoute = parsePath('/projects/proj_core_01');
+  assert(
+    projectDetailRoute?.page === 'project_detail' && projectDetailRoute.projectId === 'proj_core_01',
+    'Path "/projects/proj_core_01" parses to project_detail with projectId'
+  );
+
+  // Chat / Agent route parsing
+  const chatRoute = parsePath('/chat');
+  assert(chatRoute?.page === 'agent', 'Path "/chat" parses to agent AI chat view');
+
+  const agentRoute = parsePath('/agent');
+  assert(agentRoute?.page === 'agent', 'Alias "/agent" parses to agent AI chat view');
+
+  // Activity & Settings route parsing
+  const activityRoute = parsePath('/activity');
+  assert(activityRoute?.page === 'activity', 'Path "/activity" parses to activity view');
+
+  const settingsRoute = parsePath('/settings');
+  assert(settingsRoute?.page === 'settings', 'Path "/settings" parses to settings view');
+
+  // Invalid routes handling (graceful fallback to landing)
+  const invalidRoute1 = parsePath('/non-existent-page');
+  assert(invalidRoute1 === null, 'Unrecognized path "/non-existent-page" returns null for landing fallback');
+
+  const invalidRoute2 = parsePath('/projects/nested/deep/path');
+  assert(invalidRoute2 === null, 'Malformed nested path returns null for landing fallback');
+
+  // Route path generator (routeToPath) verification
+  assert(routeToPath('landing') === '/', 'routeToPath("landing") generates "/"');
+  assert(routeToPath('overview') === '/overview', 'routeToPath("overview") generates "/overview"');
+  assert(routeToPath('tasks') === '/tasks', 'routeToPath("tasks") generates "/tasks"');
+  assert(routeToPath('projects') === '/projects', 'routeToPath("projects") generates "/projects"');
+  assert(routeToPath('project_detail', 'proj_core_01') === '/projects/proj_core_01', 'routeToPath("project_detail", "proj_core_01") generates "/projects/proj_core_01"');
+  assert(routeToPath('project_detail', null) === '/projects', 'routeToPath("project_detail", null) falls back to "/projects"');
+  assert(routeToPath('agent') === '/chat', 'routeToPath("agent") generates "/chat"');
+  assert(routeToPath('activity') === '/activity', 'routeToPath("activity") generates "/activity"');
+  assert(routeToPath('settings') === '/settings', 'routeToPath("settings") generates "/settings"');
 
   console.log(`\n========================================`);
   console.log(`All Tests Finished: ${passed} Passed, ${failed} Failed`);

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { apiClient, isProductionEnv } from '../services/apiClient';
+import { AiOrb } from '../components/common/AiOrb';
 import {
   Sparkles,
   Bot,
@@ -296,8 +297,15 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
 
           {/* Nav Links */}
           <div className="hidden md:flex items-center gap-6 text-xs font-medium text-slate-600 dark:text-neutral-400">
+            <button
+              onClick={() => setCurrentPage('agent')}
+              className="text-indigo-600 dark:text-indigo-400 font-semibold hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>AI Chat</span>
+            </button>
             <a href="#ai-chatbot" className="hover:text-slate-900 dark:hover:text-white transition-colors">
-              AI Chatbot
+              Chatbot Preview
             </a>
             <a href="#smart-planner" className="hover:text-slate-900 dark:hover:text-white transition-colors">
               Smart Planner
@@ -361,8 +369,11 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-12 sm:pt-16 pb-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-[11px] text-slate-700 dark:bg-neutral-900 dark:border-neutral-800 dark:text-neutral-300 mb-6 shadow-2xs">
+      <section className="pt-12 sm:pt-16 pb-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full text-center relative">
+        {/* Subtle background glow from orb */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-500/10 dark:bg-violet-600/15 rounded-full blur-3xl pointer-events-none -z-10" />
+
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass-pill text-[11px] text-slate-700 dark:text-neutral-300 mb-6 shadow-2xs">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <span>Workers AI Edge Service Operational</span>
           <span className="text-slate-400 dark:text-neutral-600">·</span>
@@ -371,7 +382,7 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
 
         <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 dark:text-white max-w-4xl mx-auto leading-tight sm:leading-tight">
           The Edge-Native AI Workspace for{' '}
-          <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-600 via-violet-600 to-indigo-500 dark:from-indigo-400 dark:via-violet-300 dark:to-indigo-200">
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-500 dark:from-indigo-400 dark:via-violet-300 dark:to-indigo-200">
             High-Velocity Engineering
           </span>
         </h1>
@@ -393,34 +404,39 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
         {/* Hero CTAs */}
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <button
+            onClick={() => setCurrentPage('agent')}
+            className="flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 hover:from-indigo-500 hover:to-violet-500 rounded-xl shadow-lg shadow-indigo-500/25 transition-all active:scale-[0.98] cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Open AI Chat Page</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+          <button
             onClick={onEnterDashboard}
-            className="flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-md transition-colors"
+            className="flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-medium text-slate-700 hover:text-slate-900 glass-pill rounded-xl transition-all shadow-2xs active:scale-[0.98] cursor-pointer dark:text-neutral-200 dark:hover:text-white"
           >
             <LayoutDashboard className="w-4 h-4" />
-            <span>Open Workspace Dashboard</span>
-            <ArrowRight className="w-4 h-4" />
+            <span>Workspace Dashboard</span>
           </button>
           <a
             href="#ai-chatbot"
-            className="flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 dark:text-neutral-300 dark:bg-neutral-900 dark:hover:bg-neutral-850 dark:border-neutral-800 rounded-lg transition-colors shadow-2xs"
+            className="flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-500 hover:text-slate-700 dark:text-neutral-400 dark:hover:text-neutral-200 rounded-xl transition-all"
           >
             <Bot className="w-4 h-4 text-violet-600 dark:text-violet-400" />
-            <span>Test AI Chatbot Below</span>
+            <span>Scroll to Quick Chat</span>
           </a>
         </div>
       </section>
 
       {/* ---------------------------------------------------------------------- */}
-      {/* FIRST AI CHATBOT ON LANDING PAGE (Claude / ChatGPT Aesthetic)          */}
+      {/* FIRST AI CHATBOT ON LANDING PAGE (Claude / ChatGPT Aesthetic + PDF Orb)*/}
       {/* ---------------------------------------------------------------------- */}
       <section id="ai-chatbot" className="py-8 sm:py-12 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto w-full scroll-mt-20">
-        <div className="bg-white border border-slate-200 dark:bg-[#171717] dark:border-neutral-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
-          {/* Top Bar: Minimalist ChatGPT/Claude style */}
-          <div className="px-5 sm:px-6 py-3.5 bg-slate-50/90 border-b border-slate-200 dark:bg-[#171717] dark:border-neutral-800/80 flex items-center justify-between">
+        <div className="glass-panel rounded-3xl overflow-hidden shadow-2xl flex flex-col border border-white/20 dark:border-white/10">
+          {/* Top Bar: Minimalist ChatGPT/Claude style with Orb */}
+          <div className="px-5 sm:px-6 py-3.5 bg-slate-50/70 border-b border-slate-200/80 dark:bg-neutral-900/60 dark:border-white/10 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-6 h-6 rounded-full bg-slate-100 border border-slate-200 text-indigo-600 dark:bg-neutral-850 dark:border-neutral-750 dark:text-violet-400 flex items-center justify-center">
-                <Sparkles className="w-3.5 h-3.5" />
-              </div>
+              <AiOrb size="sm" />
               <span className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-neutral-100 tracking-tight">Orbit 2.0</span>
               <span className="text-slate-400 dark:text-neutral-600 font-mono">/</span>
               <span className="text-xs text-slate-500 dark:text-neutral-400 hidden sm:inline">Llama 3.1 8B Fast</span>
@@ -470,7 +486,7 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
           </div>
 
           {/* Prompt Suggestions */}
-          <div className="px-5 sm:px-6 py-2 bg-slate-50 border-t border-slate-200 dark:bg-[#171717] dark:border-neutral-800/60 flex flex-wrap items-center gap-1.5">
+          <div className="px-5 sm:px-6 py-2.5 bg-slate-50/60 border-t border-slate-200/80 dark:bg-neutral-900/40 dark:border-white/10 flex flex-wrap items-center gap-1.5">
             <span className="text-[11px] text-slate-500 dark:text-neutral-500 mr-1">Suggestions:</span>
             {[
               'Plan a 2-week MVP sprint with deliverables',
@@ -481,7 +497,7 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
                 key={preset}
                 type="button"
                 onClick={() => sendLandingMessage(preset)}
-                className="px-2.5 py-1 text-[11px] text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 dark:text-neutral-300 dark:bg-neutral-900 dark:hover:bg-neutral-850 dark:hover:text-white dark:border-neutral-800 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                className="px-3 py-1.5 text-[11px] text-slate-700 hover:text-slate-900 glass-pill dark:text-neutral-300 dark:hover:text-white rounded-xl transition-all cursor-pointer shadow-2xs active:scale-[0.98]"
               >
                 {preset}
               </button>
@@ -489,10 +505,10 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
           </div>
 
           {/* Floating Pill Composer */}
-          <div className="p-4 sm:p-5 bg-slate-50/80 dark:bg-[#171717]">
+          <div className="p-4 sm:p-5 bg-slate-50/50 dark:bg-neutral-950/40">
             <form
               onSubmit={handleFormSubmit}
-              className="bg-white border border-slate-300 dark:bg-[#212121] dark:border-neutral-750/80 rounded-3xl p-2.5 sm:p-3 shadow-md focus-within:border-indigo-500 dark:focus-within:border-neutral-500 transition-all flex flex-col"
+              className="glass-input rounded-3xl p-2.5 sm:p-3 shadow-md focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all flex flex-col"
             >
               <textarea
                 value={inputPrompt}
@@ -516,7 +532,7 @@ export const LandingPageView: React.FC<{ onEnterDashboard: () => void }> = ({
                   disabled={!inputPrompt.trim() || isAiLoading}
                   className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all ${
                     inputPrompt.trim() && !isAiLoading
-                      ? 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 cursor-pointer shadow-xs'
+                      ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-500 hover:to-violet-500 cursor-pointer shadow-md active:scale-95'
                       : 'bg-slate-100 text-slate-400 dark:bg-neutral-800 dark:text-neutral-500 cursor-not-allowed opacity-50'
                   }`}
                   title="Send message"

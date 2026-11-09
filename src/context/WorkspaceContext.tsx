@@ -182,10 +182,129 @@ const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefin
 
 const TODAY_DATE = '2026-10-14';
 
+export interface RouteState {
+  page: PageView;
+  projectId: string | null;
+}
+
+export function parsePath(pathname: string): RouteState | null {
+  const clean = pathname.replace(/\/+$/, '') || '/';
+
+  if (clean === '/' || clean === '/landing') {
+    return { page: 'landing', projectId: null };
+  }
+  if (clean === '/overview' || clean === '/dashboard') {
+    return { page: 'overview', projectId: null };
+  }
+  if (clean === '/tasks') {
+    return { page: 'tasks', projectId: null };
+  }
+  if (clean === '/projects') {
+    return { page: 'projects', projectId: null };
+  }
+  if (clean.startsWith('/projects/')) {
+    const parts = clean.split('/');
+    if (parts.length === 3 && parts[2]) {
+      return { page: 'project_detail', projectId: decodeURIComponent(parts[2]) };
+    }
+    return null;
+  }
+  if (clean === '/chat' || clean === '/agent') {
+    return { page: 'agent', projectId: null };
+  }
+  if (clean === '/activity') {
+    return { page: 'activity', projectId: null };
+  }
+  if (clean === '/settings') {
+    return { page: 'settings', projectId: null };
+  }
+
+  return null;
+}
+
+export function routeToPath(page: PageView, projectId?: string | null): string {
+  switch (page) {
+    case 'landing':
+      return '/';
+    case 'overview':
+      return '/overview';
+    case 'tasks':
+      return '/tasks';
+    case 'projects':
+      return '/projects';
+    case 'project_detail':
+      return projectId ? `/projects/${encodeURIComponent(projectId)}` : '/projects';
+    case 'agent':
+      return '/chat';
+    case 'activity':
+      return '/activity';
+    case 'settings':
+      return '/settings';
+    default:
+      return '/';
+  }
+}
+
 export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Navigation
-  const [currentPage, setCurrentPage] = useState<PageView>('landing');
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  // Navigation: Synchronize currentPage with window.location.pathname & browser history
+  const initialRoute = useMemo((): RouteState => {
+    if (typeof window === 'undefined') {
+      return { page: 'landing', projectId: null };
+    }
+    const parsed = parsePath(window.location.pathname);
+    if (parsed) {
+      return parsed;
+    }
+    // Invalid route: redirect gracefully to landing page (Requirement 4)
+    if (window.location.pathname !== '/') {
+      window.history.replaceState({ page: 'landing', projectId: null }, '', '/');
+    }
+    return { page: 'landing', projectId: null };
+  }, []);
+
+  const [currentPage, setCurrentPageState] = useState<PageView>(initialRoute.page);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialRoute.projectId);
+
+  const setCurrentPage = (page: PageView) => {
+    const targetPath = routeToPath(page, page === 'project_detail' ? selectedProjectId : null);
+    if (typeof window !== 'undefined' && window.location.pathname !== targetPath) {
+      window.history.pushState(
+        { page, projectId: page === 'project_detail' ? selectedProjectId : null },
+        '',
+        targetPath
+      );
+    }
+    setCurrentPageState(page);
+  };
+
+  const navigateToProjectDetail = (projectId: string) => {
+    setSelectedProjectId(projectId);
+    const targetPath = routeToPath('project_detail', projectId);
+    if (typeof window !== 'undefined' && window.location.pathname !== targetPath) {
+      window.history.pushState({ page: 'project_detail', projectId }, '', targetPath);
+    }
+    setCurrentPageState('project_detail');
+  };
+
+  // Browser back/forward navigation support (popstate)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handlePopState = () => {
+      const parsed = parsePath(window.location.pathname);
+      if (parsed) {
+        setCurrentPageState(parsed.page);
+        setSelectedProjectId(parsed.projectId);
+      } else {
+        window.history.replaceState({ page: 'landing', projectId: null }, '', '/');
+        setCurrentPageState('landing');
+        setSelectedProjectId(null);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Settings
   const [settings, setSettings] = useState<UserSettings>(() => settingsService.getSettings());
@@ -478,11 +597,6 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  const navigateToProjectDetail = (projectId: string) => {
-    setSelectedProjectId(projectId);
-    setCurrentPage('project_detail');
-  };
 
   // Derive metrics reactively
   const metrics = useMemo(() => {
