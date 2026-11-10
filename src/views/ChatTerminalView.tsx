@@ -55,10 +55,39 @@ export const ChatTerminalView: React.FC = () => {
   const [isMobileHistoryOpen, setIsMobileHistoryOpen] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
+  const prevMessageCountRef = useRef(chatMessages.length);
 
-  // Auto-scroll when messages update or streaming
+  const handleScroll = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isNearBottomRef.current = distanceFromBottom < 120;
+  };
+
+  // Smooth scroll when new message is sent or received
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatMessages.length > prevMessageCountRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      isNearBottomRef.current = true;
+    }
+    prevMessageCountRef.current = chatMessages.length;
+  }, [chatMessages.length]);
+
+  // Non-blocking RAF auto-scroll during streaming (avoids layout thrashing and respects manual scroll-up)
+  useEffect(() => {
+    if (!isChatStreaming || !isNearBottomRef.current) return;
+    const el = messagesContainerRef.current;
+    if (!el) return;
+
+    const rafId = requestAnimationFrame(() => {
+      if (isNearBottomRef.current && messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+      }
+    });
+
+    return () => cancelAnimationFrame(rafId);
   }, [chatMessages, isChatStreaming]);
 
   const handleDeleteConversation = (id: string) => {
@@ -154,7 +183,7 @@ export const ChatTerminalView: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsMobileHistoryOpen(true)}
-              className="md:hidden p-1.5 text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors"
+              className="md:hidden min-w-[40px] min-h-[40px] flex items-center justify-center p-2 text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors duration-150 cursor-pointer"
               title="Open Conversation History"
             >
               <PanelLeftOpen className="w-4 h-4" />
@@ -178,7 +207,7 @@ export const ChatTerminalView: React.FC = () => {
             <button
               type="button"
               onClick={handleShare}
-              className="p-1.5 text-slate-500 hover:text-slate-800 dark:text-neutral-400 dark:hover:text-neutral-200 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors flex items-center gap-1 text-xs"
+              className="min-h-[38px] px-2.5 py-1.5 text-slate-500 hover:text-slate-800 dark:text-neutral-400 dark:hover:text-neutral-200 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors duration-150 flex items-center gap-1 text-xs cursor-pointer"
               title="Share thread"
             >
               {copiedShare ? (
@@ -199,7 +228,7 @@ export const ChatTerminalView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => handleDeleteConversation(activeConversation.id)}
-                className="p-1.5 text-slate-500 hover:text-rose-600 dark:text-neutral-400 dark:hover:text-rose-400 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors"
+                className="min-w-[38px] min-h-[38px] flex items-center justify-center p-2 text-slate-500 hover:text-rose-600 dark:text-neutral-400 dark:hover:text-rose-400 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors duration-150 cursor-pointer"
                 title="Delete this conversation"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -210,7 +239,7 @@ export const ChatTerminalView: React.FC = () => {
             <button
               type="button"
               onClick={() => createNewConversation()}
-              className="p-1.5 text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors ml-1"
+              className="min-w-[38px] min-h-[38px] flex items-center justify-center p-2 text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors duration-150 cursor-pointer ml-1"
               title="Start New Chat"
             >
               <Plus className="w-4 h-4" />
@@ -218,11 +247,15 @@ export const ChatTerminalView: React.FC = () => {
           </div>
         </div>
 
-        {/* Message Stream Area */}
-        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* Message Stream Area with Scroll Container Hook */}
+        <div
+          ref={messagesContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-6"
+        >
           {chatMessages.length === 0 ? (
             /* Cortex / Prospectory Luminous AI Canvas (Inspiration PDF Pages 3, 5, 12, 13) */
-            <div className="min-h-full flex flex-col items-center justify-center text-center max-w-2xl mx-auto py-8 animate-in fade-in">
+            <div className="min-h-full flex flex-col items-center justify-center text-center max-w-2xl mx-auto py-8">
               <AiOrb size="lg" isThinking={isChatStreaming} className="mb-5" />
 
               <div className="space-y-1.5 mb-5">
@@ -255,7 +288,7 @@ export const ChatTerminalView: React.FC = () => {
                         if (pill.forceWeb) setWebSearchActive(true);
                         sendChatMessage(pill.prompt, [], pill.forceWeb);
                       }}
-                      className="glass-pill px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 hover:text-slate-900 dark:text-neutral-300 dark:hover:text-white flex items-center gap-1.5 hover:scale-[1.03] transition-all cursor-pointer shadow-2xs"
+                      className="glass-pill min-h-[40px] px-3.5 py-2 rounded-full text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 dark:text-neutral-300 dark:hover:text-white dark:hover:bg-neutral-800 flex items-center gap-1.5 transition-colors duration-150 cursor-pointer shadow-2xs"
                     >
                       <Icon className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                       <span>{pill.label}</span>
@@ -273,13 +306,13 @@ export const ChatTerminalView: React.FC = () => {
                       key={item.title}
                       type="button"
                       onClick={() => sendChatMessage(item.title)}
-                      className="glass-panel p-4 rounded-2xl text-xs transition-all hover:scale-[1.01] hover:border-indigo-400/60 dark:hover:border-indigo-500/40 group cursor-pointer text-left shadow-2xs"
+                      className="glass-panel p-4 rounded-2xl text-xs transition-colors duration-150 hover:border-indigo-400/60 dark:hover:border-indigo-500/40 group cursor-pointer text-left shadow-2xs"
                     >
                       <div className="flex items-center gap-2 mb-1.5">
                         <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/60 dark:border-indigo-800/60 flex items-center justify-center shrink-0">
-                          <Icon className="w-4 h-4 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform" />
+                          <Icon className="w-4 h-4 text-indigo-600 dark:text-indigo-400 transition-colors duration-150" />
                         </div>
-                        <span className="font-semibold text-slate-800 group-hover:text-slate-900 dark:text-neutral-200 dark:group-hover:text-white transition-colors">
+                        <span className="font-semibold text-slate-800 group-hover:text-slate-900 dark:text-neutral-200 dark:group-hover:text-white transition-colors duration-150">
                           {item.title}
                         </span>
                       </div>

@@ -132,7 +132,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
       {/* Floating Glass Capsule Composer (Inspiration PDF Pages 2, 5, 6, 13) */}
       <form
         onSubmit={handleSubmit}
-        className="glass-input rounded-3xl p-3 sm:p-3.5 shadow-xl hover:shadow-2xl focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500/80 transition-all flex flex-col"
+        className="glass-input rounded-3xl p-3 sm:p-3.5 shadow-lg focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500/80 transition-colors duration-150 flex flex-col"
       >
         <textarea
           ref={textareaRef}
@@ -142,7 +142,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           disabled={disabled}
           placeholder={isStreaming ? 'Thinking...' : placeholder}
           rows={1}
-          className="w-full px-2 py-1 bg-transparent text-[14px] text-slate-900 dark:text-neutral-100 placeholder-slate-400 dark:placeholder-neutral-500 resize-none focus:outline-hidden leading-relaxed max-h-52 min-h-[28px]"
+          className="w-full px-2.5 py-1.5 bg-transparent text-[16px] sm:text-[15px] text-slate-900 dark:text-neutral-100 placeholder-slate-400 dark:placeholder-neutral-500 resize-none focus:outline-hidden leading-[1.6] max-h-52 min-h-[32px]"
         />
 
         {/* Bottom Control Bar */}
@@ -152,7 +152,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-neutral-400 dark:hover:text-neutral-100 dark:hover:bg-neutral-800 rounded-full transition-colors cursor-pointer"
+              className="w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-neutral-400 dark:hover:text-neutral-100 dark:hover:bg-neutral-800 rounded-full transition-colors duration-150 cursor-pointer"
               title="Attach files or code"
             >
               <Paperclip className="w-4 h-4" />
@@ -163,7 +163,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
               <button
                 type="button"
                 onClick={onToggleWebSearch}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                className={`min-h-[44px] px-3.5 flex items-center gap-1.5 rounded-full text-xs font-medium transition-colors duration-150 cursor-pointer ${
                   isWebSearchActive
                     ? 'bg-indigo-600 text-white shadow-xs dark:bg-indigo-500'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-neutral-400 dark:hover:text-neutral-200 dark:hover:bg-neutral-800'
@@ -171,7 +171,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
                 title={isWebSearchActive ? 'Web Search: Active (Live intelligence enabled)' : 'Enable Web Search (Search live internet)'}
               >
                 <Globe className={`w-3.5 h-3.5 ${isWebSearchActive ? 'text-white' : 'text-slate-500 dark:text-neutral-400'}`} />
-                <span className="text-[11px] hidden sm:inline">Search</span>
+                <span className="text-[12px] font-medium hidden sm:inline">Search</span>
               </button>
             )}
           </div>
@@ -182,18 +182,18 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
               <button
                 type="button"
                 onClick={onStopGeneration}
-                className="w-8 h-8 rounded-full bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 flex items-center justify-center transition-all shadow-md cursor-pointer hover:scale-105 active:scale-95"
+                className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-full bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 flex items-center justify-center transition-colors duration-150 shadow-md cursor-pointer"
                 title="Stop generating"
               >
-                <Square className="w-3.5 h-3.5 fill-white dark:fill-black" />
+                <Square className="w-4 h-4 fill-white dark:fill-black" />
               </button>
             ) : (
               <button
                 type="submit"
                 disabled={!hasValidInput || disabled}
-                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-md ${
+                className={`w-11 h-11 min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center transition-colors duration-150 shadow-md ${
                   hasValidInput && !disabled
-                    ? 'bg-indigo-600 text-white hover:bg-indigo-500 dark:bg-white dark:text-black dark:hover:bg-neutral-200 cursor-pointer hover:scale-105 active:scale-95'
+                    ? 'bg-indigo-600 text-white hover:bg-indigo-500 dark:bg-white dark:text-black dark:hover:bg-neutral-200 cursor-pointer'
                     : 'bg-slate-200 text-slate-400 dark:bg-neutral-800 dark:text-neutral-500 cursor-not-allowed opacity-60'
                 }`}
                 title="Send message (Enter)"
@@ -206,7 +206,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
       </form>
 
       {/* ChatGPT / Claude subtle bottom disclaimer */}
-      <div className="mt-2 text-center text-[11px] text-slate-500 dark:text-neutral-500 select-none">
+      <div className="mt-2 text-center text-xs sm:text-[12px] text-slate-500 dark:text-neutral-500 select-none">
         Orbit can make mistakes. Verify important information.
       </div>
     </div>

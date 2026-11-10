@@ -148,7 +148,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                 <div
                   key={conv.id}
                   onClick={() => onSelectConversation(conv.id)}
-                  className={`group relative flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer transition-colors ${
+                  className={`group relative flex items-center justify-between px-3 py-2.5 min-h-[40px] rounded-xl cursor-pointer transition-colors duration-150 ${
                     isActive
                       ? 'bg-indigo-50 border border-indigo-200/60 text-indigo-900 font-medium dark:bg-neutral-850 dark:border-transparent dark:text-white'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-neutral-400 dark:hover:text-neutral-200 dark:hover:bg-neutral-900/60'

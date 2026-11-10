@@ -28,7 +28,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         return (
           <code
             key={i}
-            className="px-1.5 py-0.5 mx-0.5 rounded text-[11px] font-mono bg-slate-100 text-indigo-700 border border-slate-200 dark:bg-neutral-800 dark:text-indigo-300 dark:border-neutral-700/60"
+            className="px-1.5 py-0.5 mx-0.5 rounded text-[13px] sm:text-[13.5px] font-mono bg-slate-100 text-indigo-700 border border-slate-200 dark:bg-neutral-850 dark:text-indigo-300 dark:border-neutral-750"
           >
             {part.slice(1, -1)}
           </code>
@@ -88,9 +88,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         elements.push(
           <div
             key={`code-${currentIdx}`}
-            className="my-3 rounded-xl overflow-hidden border border-slate-200 dark:border-neutral-800 bg-neutral-950 text-xs shadow-xs"
+            className="my-3.5 rounded-xl overflow-hidden border border-slate-200 dark:border-neutral-800 bg-neutral-950 shadow-xs"
           >
-            <div className="flex items-center justify-between px-3 py-1.5 bg-neutral-900 border-b border-neutral-800 text-[11px] text-neutral-400">
+            <div className="flex items-center justify-between px-3.5 py-2 bg-neutral-900/95 border-b border-neutral-800 text-[12px] text-neutral-400">
               <div className="flex items-center gap-1.5 font-mono">
                 <Terminal className="w-3.5 h-3.5 text-neutral-500" />
                 <span>{lang}</span>
@@ -98,7 +98,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               <button
                 type="button"
                 onClick={() => handleCopyCode(fullCode, currentIdx)}
-                className="flex items-center gap-1 text-[11px] text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 min-h-[30px] px-2 py-1 rounded text-xs text-neutral-400 hover:text-white hover:bg-neutral-800/80 transition-colors duration-150 cursor-pointer"
                 title="Copy snippet"
               >
                 {copiedIndex === currentIdx ? (
@@ -114,7 +114,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                 )}
               </button>
             </div>
-            <pre className="p-3.5 overflow-x-auto font-mono text-[11px] leading-relaxed text-neutral-200 selection:bg-indigo-500/30">
+            <pre className="p-4 overflow-x-auto font-mono text-[13px] sm:text-[13.5px] leading-relaxed text-neutral-200 selection:bg-indigo-500/30">
               <code>{fullCode}</code>
             </pre>
           </div>
@@ -142,13 +142,13 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           elements.push(
             <div
               key={`table-${currentIdx}`}
-              className="my-3 overflow-x-auto rounded-xl border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-950/50 shadow-xs"
+              className="my-3.5 overflow-x-auto rounded-xl border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-950/50 shadow-xs"
             >
-              <table className="w-full text-left text-xs">
+              <table className="w-full text-left text-xs sm:text-[13px]">
                 <thead>
-                  <tr className="border-b border-slate-200 dark:border-neutral-800 bg-slate-50 dark:bg-neutral-900/80 text-slate-900 dark:text-neutral-300 font-semibold">
+                  <tr className="border-b border-slate-200 dark:border-neutral-800 bg-slate-50 dark:bg-neutral-900/80 text-slate-900 dark:text-neutral-200 font-semibold">
                     {headerCells.map((h, hIdx) => (
-                      <th key={hIdx} className="px-3 py-2 font-medium">
+                      <th key={hIdx} className="px-3.5 py-2.5 font-medium">
                         {renderInline(h)}
                       </th>
                     ))}
@@ -162,9 +162,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                       .map((c) => c.trim());
 
                     return (
-                      <tr key={rIdx} className="hover:bg-slate-50 dark:hover:bg-neutral-800/30 transition-colors">
+                      <tr key={rIdx} className="hover:bg-slate-50 dark:hover:bg-neutral-800/30 transition-colors duration-150">
                         {rowCells.map((c, cIdx) => (
-                          <td key={cIdx} className="px-3 py-2 text-slate-700 dark:text-neutral-300">
+                          <td key={cIdx} className="px-3.5 py-2.5 text-slate-800 dark:text-neutral-300">
                             {renderInline(c)}
                           </td>
                         ))}
@@ -184,7 +184,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         elements.push(
           <h3
             key={`h3-${i}`}
-            className="text-sm font-semibold text-slate-900 dark:text-neutral-100 mt-3 mb-1.5 flex items-center gap-1.5"
+            className="text-[16px] sm:text-[17px] font-semibold text-slate-900 dark:text-neutral-100 mt-3.5 mb-1.5 flex items-center gap-1.5"
           >
             {renderInline(line.replace('### ', ''))}
           </h3>
@@ -196,7 +196,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         elements.push(
           <h2
             key={`h2-${i}`}
-            className="text-base font-bold text-slate-900 dark:text-neutral-100 mt-4 mb-2"
+            className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 dark:text-neutral-100 mt-4.5 mb-2"
           >
             {renderInline(line.replace('## ', ''))}
           </h2>
@@ -208,7 +208,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         elements.push(
           <h1
             key={`h1-${i}`}
-            className="text-lg font-bold text-slate-900 dark:text-neutral-100 mt-4 mb-2"
+            className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-neutral-100 mt-5 mb-2.5"
           >
             {renderInline(line.replace('# ', ''))}
           </h1>
@@ -222,7 +222,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         elements.push(
           <blockquote
             key={`quote-${i}`}
-            className="my-2 pl-3 py-1.5 border-l-2 border-indigo-500 text-xs text-slate-700 dark:text-neutral-400 italic bg-slate-50 dark:bg-neutral-900/40 rounded-r"
+            className="my-3 pl-3.5 py-2 border-l-2 border-indigo-500 text-[14px] sm:text-[15px] leading-[1.6] text-slate-700 dark:text-neutral-300 italic bg-slate-50/80 dark:bg-neutral-900/40 rounded-r-lg"
           >
             {renderInline(line.replace('> ', ''))}
           </blockquote>
@@ -238,11 +238,11 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         const textPart = match ? match[2] : line;
 
         elements.push(
-          <div key={`list-${i}`} className="flex items-start gap-2 my-1 text-xs">
-            <span className="text-slate-400 dark:text-neutral-500 font-mono text-[11px] shrink-0 mt-0.5">
+          <div key={`list-${i}`} className="flex items-start gap-2.5 my-1.5 text-[15px] sm:text-[16px]">
+            <span className="text-indigo-600 dark:text-indigo-400 font-mono font-semibold text-[13px] sm:text-[14px] shrink-0 mt-0.5">
               {isNumbered ? `${line.match(/^\s*(\d+\.)/)?.[1]}` : '•'}
             </span>
-            <div className="flex-1 text-slate-800 dark:text-neutral-300 leading-relaxed">
+            <div className="flex-1 text-slate-800 dark:text-neutral-200 leading-[1.6]">
               {renderInline(textPart)}
             </div>
           </div>
@@ -256,7 +256,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         elements.push(<div key={`blank-${i}`} className="h-2" />);
       } else {
         elements.push(
-          <p key={`p-${i}`} className="text-xs text-slate-800 dark:text-neutral-300 leading-relaxed my-1">
+          <p key={`p-${i}`} className="text-[15px] sm:text-[16px] text-slate-800 dark:text-neutral-200 leading-[1.6] my-2">
             {renderInline(line)}
           </p>
         );
@@ -271,7 +271,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     <div className="markdown-content">
       {renderBlocks()}
       {isStreaming && (
-        <span className="inline-block w-1.5 h-3.5 bg-indigo-400 ml-1 animate-pulse align-middle" />
+        <span className="inline-block w-1.5 h-4 bg-indigo-500 dark:bg-indigo-400 ml-1 animate-pulse align-middle rounded-xs" />
       )}
     </div>
   );

@@ -24,7 +24,7 @@ export const AiOrb: React.FC<AiOrbProps> = ({
     <div className={`relative flex items-center justify-center select-none pointer-events-none ${className}`}>
       {/* Ambient background bloom */}
       <div
-        className={`absolute rounded-full blur-2xl transition-all duration-700 ${
+        className={`absolute rounded-full blur-2xl transform-gpu transition-all duration-300 ${
           isThinking
             ? 'w-48 h-48 bg-linear-to-tr from-violet-600/60 via-fuchsia-500/50 to-indigo-500/60 animate-orb-pulse'
             : 'w-36 h-36 bg-linear-to-tr from-violet-500/35 via-indigo-400/30 to-pink-400/25 dark:from-violet-600/40 dark:via-indigo-500/30 dark:to-pink-500/30'
@@ -33,7 +33,7 @@ export const AiOrb: React.FC<AiOrbProps> = ({
 
       {/* Primary Luminous Iridescent Sphere (Inspiration PDF Pages 3, 5, 12, 13) */}
       <div
-        className={`relative ${orbDimensions} rounded-full overflow-hidden transition-all duration-500 animate-orb-float shadow-2xl`}
+        className={`relative ${orbDimensions} rounded-full overflow-hidden transform-gpu transition-all duration-300 animate-orb-float shadow-2xl`}
         style={{
           background: 'radial-gradient(circle at 35% 30%, #ffffff 0%, #e0e7ff 15%, #c084fc 45%, #818cf8 70%, #4f46e5 90%, #312e81 100%)',
           boxShadow: 'inset -6px -8px 18px rgba(30, 27, 75, 0.65), inset 4px 6px 14px rgba(255, 255, 255, 0.95), 0 16px 40px -10px rgba(124, 58, 237, 0.45)',

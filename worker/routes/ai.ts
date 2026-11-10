@@ -338,3 +338,48 @@ export async function handleAiChat(
   );
 }
 
+export async function handleGetAiModels(
+  _request: Request,
+  env: Env,
+  _user: AuthenticatedUser
+): Promise<Response> {
+  const modelRegistry = ModelProviderRegistry.fromEnv(env);
+  return jsonResponse(
+    {
+      providers: modelRegistry.listProviders(),
+      defaultModel: DEFAULT_CLOUDFLARE_MODEL,
+      models: [
+        {
+          id: 'orbit-agent-v2',
+          name: 'Llama 3.1 8B Instruct Fast',
+          provider: 'cloudflare',
+          isDefault: true,
+          isConfigured: Boolean(env.AI),
+        },
+        {
+          id: 'gpt-4o',
+          name: 'GPT-4o',
+          provider: 'openai',
+          isDefault: false,
+          isConfigured: Boolean(env.OPENAI_API_KEY && env.OPENAI_API_KEY.trim().length > 0),
+        },
+        {
+          id: 'gemini-2.5-flash',
+          name: 'Gemini 2.5 Flash',
+          provider: 'gemini',
+          isDefault: false,
+          isConfigured: Boolean(env.GEMINI_API_KEY && env.GEMINI_API_KEY.trim().length > 0),
+        },
+        {
+          id: 'claude-3-7-sonnet',
+          name: 'Claude 3.7 Sonnet',
+          provider: 'anthropic',
+          isDefault: false,
+          isConfigured: Boolean(env.ANTHROPIC_API_KEY && env.ANTHROPIC_API_KEY.trim().length > 0),
+        },
+      ],
+    },
+    200
+  );
+}
+

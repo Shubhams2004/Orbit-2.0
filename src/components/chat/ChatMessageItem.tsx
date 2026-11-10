@@ -27,7 +27,7 @@ interface ChatMessageItemProps {
   onRejectAction?: (actionId: string) => void;
 }
 
-export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
+const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
   message,
   onRegenerate,
   onApproveAction,
@@ -48,7 +48,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
 
   return (
     <div
-      className={`w-full max-w-3xl mx-auto py-2.5 px-2 sm:px-0 group animate-in fade-in duration-200 ${
+      className={`w-full max-w-3xl mx-auto py-2.5 px-2 sm:px-0 group ${
         isUser ? 'flex justify-end' : 'flex justify-start'
       }`}
     >
@@ -74,11 +74,11 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           )}
 
           {/* User Text Bubble */}
-          <div className="bg-slate-200 hover:bg-slate-300/80 text-slate-900 dark:bg-[#2f2f2f] dark:hover:bg-[#343434] dark:text-neutral-100 rounded-3xl rounded-br-md px-4.5 py-3 text-[14px] leading-relaxed shadow-xs transition-colors whitespace-pre-wrap select-text">
+          <div className="bg-slate-200 hover:bg-slate-300/80 text-slate-900 dark:bg-[#2f2f2f] dark:hover:bg-[#343434] dark:text-neutral-100 rounded-3xl rounded-br-md px-4.5 py-3 sm:px-5 sm:py-3.5 text-[15px] sm:text-[16px] leading-[1.6] shadow-xs transition-colors duration-150 whitespace-pre-wrap select-text">
             {message.content}
           </div>
 
-          <span className="text-[10px] text-slate-500 dark:text-neutral-500 font-mono pr-1 tabular-nums">
+          <span className="text-[11px] text-slate-500 dark:text-neutral-500 font-mono pr-1 tabular-nums">
             {new Date(message.timestamp).toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit',
@@ -89,10 +89,10 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
         /* ========================================================= */
         /* ASSISTANT MESSAGE (Claude / ChatGPT Minimal Breathable)    */
         /* ========================================================= */
-        <div className="flex gap-3.5 w-full text-[14px] leading-relaxed">
+        <div className="flex gap-3 sm:gap-4 w-full text-[15px] sm:text-[16px] leading-[1.6]">
           {/* Clean Minimalist Assistant Icon */}
-          <div className="w-7 h-7 rounded-full bg-white border border-slate-200 text-indigo-600 shadow-xs dark:bg-neutral-900 dark:border-neutral-750 dark:text-indigo-300 flex items-center justify-center shrink-0 mt-0.5">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-violet-400" />
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white border border-slate-200 text-indigo-600 shadow-xs dark:bg-neutral-900 dark:border-neutral-750 dark:text-indigo-300 flex items-center justify-center shrink-0 mt-0.5">
+            <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 dark:text-violet-400" />
           </div>
 
           {/* Message Content Body */}
@@ -154,20 +154,20 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
                       href={src.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="glass-panel p-2.5 rounded-xl border border-slate-200/80 dark:border-neutral-800 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all group flex items-start gap-2 shadow-2xs"
+                      className="glass-panel p-3 rounded-xl border border-slate-200/80 dark:border-neutral-800 hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors duration-150 group flex items-start gap-2 shadow-2xs"
                     >
                       <div className="w-5 h-5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-mono text-[10px] font-bold shrink-0 mt-0.5">
                         {idx + 1}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs font-medium text-slate-800 dark:text-neutral-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
+                        <div className="text-xs sm:text-[13px] font-medium text-slate-800 dark:text-neutral-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors duration-150 truncate">
                           {src.title}
                         </div>
-                        <div className="text-[10px] text-slate-400 dark:text-neutral-500 truncate mt-0.5">
+                        <div className="text-[11px] text-slate-400 dark:text-neutral-500 truncate mt-0.5">
                           {src.url.replace(/^https?:\/\//, '')}
                         </div>
                       </div>
-                      <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-slate-600 dark:text-neutral-500 dark:group-hover:text-neutral-300 shrink-0 mt-1" />
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:text-neutral-500 dark:group-hover:text-neutral-300 shrink-0 mt-1" />
                     </a>
                   ))}
                 </div>
@@ -185,7 +185,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
                   <button
                     type="button"
                     onClick={onRegenerate}
-                    className="px-2.5 py-1 text-xs text-white bg-rose-600 hover:bg-rose-500 rounded-lg transition-colors font-medium cursor-pointer"
+                    className="min-h-[36px] px-3 py-1 text-xs text-white bg-rose-600 hover:bg-rose-500 rounded-lg transition-colors duration-150 font-medium cursor-pointer"
                   >
                     Retry
                   </button>
@@ -215,7 +215,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
                   return (
                     <div
                       key={action.id}
-                      className={`p-3.5 rounded-xl border text-xs transition-colors ${
+                      className={`p-3.5 rounded-xl border text-xs transition-colors duration-150 ${
                         isApproved
                           ? 'bg-emerald-50 border-emerald-300 text-emerald-900 dark:bg-emerald-950/20 dark:border-emerald-800/40 dark:text-neutral-200'
                           : isRejected
@@ -249,7 +249,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
                               <button
                                 type="button"
                                 onClick={() => onRejectAction(action.id)}
-                                className="px-2.5 py-1 text-xs text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 dark:text-neutral-400 dark:hover:text-white dark:bg-neutral-800 dark:hover:bg-neutral-750 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                                className="min-h-[36px] px-3 py-1 text-xs text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 dark:text-neutral-400 dark:hover:text-white dark:bg-neutral-800 dark:hover:bg-neutral-750 rounded-lg transition-colors duration-150 flex items-center gap-1 cursor-pointer"
                               >
                                 <X className="w-3 h-3" />
                                 <span>Dismiss</span>
@@ -259,7 +259,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
                               <button
                                 type="button"
                                 onClick={() => onApproveAction(action.id)}
-                                className="px-3 py-1 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+                                className="min-h-[36px] px-3.5 py-1 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors duration-150 flex items-center gap-1 shadow-xs cursor-pointer"
                               >
                                 <Check className="w-3 h-3" />
                                 <span>Apply</span>
@@ -276,12 +276,12 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
 
             {/* Quiet Action Toolbar (Claude / ChatGPT Hover Style) */}
             {!isStreaming && (
-              <div className="flex items-center gap-1 pt-1 opacity-70 group-hover:opacity-100 transition-opacity text-slate-500 dark:text-neutral-400 text-xs">
+              <div className="flex items-center gap-1 pt-1 opacity-75 group-hover:opacity-100 transition-opacity duration-150 text-slate-500 dark:text-neutral-400 text-xs">
                 {/* Copy Button */}
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="p-1.5 hover:text-slate-900 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-neutral-850 rounded-lg transition-colors cursor-pointer"
+                  className="min-w-[36px] min-h-[36px] sm:min-w-[32px] sm:min-h-[32px] p-2 sm:p-1.5 flex items-center justify-center hover:text-slate-900 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-neutral-850 rounded-lg transition-colors duration-150 cursor-pointer"
                   title="Copy response"
                 >
                   {copied ? (
@@ -296,7 +296,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
                   <button
                     type="button"
                     onClick={onRegenerate}
-                    className="p-1.5 hover:text-slate-900 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-neutral-850 rounded-lg transition-colors cursor-pointer"
+                    className="min-w-[36px] min-h-[36px] sm:min-w-[32px] sm:min-h-[32px] p-2 sm:p-1.5 flex items-center justify-center hover:text-slate-900 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-neutral-850 rounded-lg transition-colors duration-150 cursor-pointer"
                     title="Regenerate response"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
@@ -307,7 +307,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
                 <button
                   type="button"
                   onClick={() => setFeedback(feedback === 'up' ? null : 'up')}
-                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  className={`min-w-[36px] min-h-[36px] sm:min-w-[32px] sm:min-h-[32px] p-2 sm:p-1.5 flex items-center justify-center rounded-lg transition-colors duration-150 cursor-pointer ${
                     feedback === 'up'
                       ? 'text-indigo-600 bg-indigo-50 dark:text-indigo-400 dark:bg-indigo-950/40'
                       : 'hover:text-slate-900 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-neutral-850'
@@ -321,7 +321,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
                 <button
                   type="button"
                   onClick={() => setFeedback(feedback === 'down' ? null : 'down')}
-                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  className={`min-w-[36px] min-h-[36px] sm:min-w-[32px] sm:min-h-[32px] p-2 sm:p-1.5 flex items-center justify-center rounded-lg transition-colors duration-150 cursor-pointer ${
                     feedback === 'down'
                       ? 'text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-950/40'
                       : 'hover:text-slate-900 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-neutral-850'
@@ -338,3 +338,5 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
     </div>
   );
 };
+
+export const ChatMessageItem = React.memo(ChatMessageItemComponent);

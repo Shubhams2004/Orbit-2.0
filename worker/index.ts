@@ -22,7 +22,7 @@ import {
   handleDeleteConversation,
   handleGetMessages,
 } from './routes/conversations';
-import { handleAiChat } from './routes/ai';
+import { handleAiChat, handleGetAiModels } from './routes/ai';
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -139,6 +139,12 @@ export default {
       // POST /api/v1/ai/chat
       if (segments[0] === 'ai' && segments[1] === 'chat') {
         if (method === 'POST') return await handleAiChat(request, env, user);
+        return errorResponse('METHOD_NOT_ALLOWED', `Method ${method} not allowed on ${pathname}`, 405);
+      }
+
+      // GET /api/v1/ai/models
+      if (segments[0] === 'ai' && segments[1] === 'models') {
+        if (method === 'GET') return await handleGetAiModels(request, env, user);
         return errorResponse('METHOD_NOT_ALLOWED', `Method ${method} not allowed on ${pathname}`, 405);
       }
 

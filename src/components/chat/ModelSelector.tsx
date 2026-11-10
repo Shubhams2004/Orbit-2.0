@@ -22,11 +22,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-xs sm:text-sm font-semibold text-slate-800 dark:bg-neutral-900 dark:hover:bg-neutral-850 dark:border-neutral-800 dark:text-neutral-100 transition-colors shadow-xs cursor-pointer"
+        className="min-h-[40px] flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-xs sm:text-sm font-semibold text-slate-800 dark:bg-neutral-900 dark:hover:bg-neutral-850 dark:border-neutral-800 dark:text-neutral-100 transition-colors duration-150 shadow-xs cursor-pointer"
       >
         <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-violet-400" />
         <span>{selectedModel.name}</span>
-        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 dark:text-neutral-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 dark:text-neutral-400 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
@@ -35,7 +35,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             className="fixed inset-0 z-40"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute left-0 mt-2 w-80 bg-white border border-slate-200 dark:bg-neutral-900 dark:border-neutral-800 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 text-xs">
+          <div className="absolute left-0 mt-2 w-80 bg-white border border-slate-200 dark:bg-neutral-900 dark:border-neutral-800 rounded-2xl shadow-xl p-2 z-50 text-xs">
             <div className="px-2.5 py-1.5 border-b border-slate-200 dark:border-neutral-800 mb-1 flex items-center justify-between text-[11px] text-slate-500 dark:text-neutral-400">
               <span className="font-semibold text-slate-800 dark:text-neutral-300">Model Engine</span>
               <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono">Edge Intelligence</span>
@@ -53,7 +53,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                       onSelectModel(model.id);
                       setIsOpen(false);
                     }}
-                    className={`w-full text-left p-2.5 rounded-xl transition-colors flex items-start justify-between gap-2 cursor-pointer ${
+                    className={`w-full min-h-[44px] text-left p-2.5 rounded-xl transition-colors duration-150 flex items-start justify-between gap-2 cursor-pointer ${
                       isSelected
                         ? 'bg-indigo-50 border border-indigo-200 text-indigo-900 dark:bg-neutral-800 dark:border-transparent dark:text-white'
                         : 'hover:bg-slate-100 text-slate-700 dark:hover:bg-neutral-850 dark:text-neutral-300'

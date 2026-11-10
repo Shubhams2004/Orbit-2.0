@@ -1974,6 +1974,26 @@ async function runTests() {
     globalThis.fetch = originalFetch;
   }
 
+  // Test 14.12: GET /api/v1/ai/models endpoint returns available providers and models
+  const modelsRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/models', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+      },
+    }),
+    openAiEnv
+  );
+  const modelsJson: any = await modelsRes.json();
+  const modelsData = modelsJson.data || modelsJson;
+  assert(modelsRes.status === 200, 'GET /api/v1/ai/models returns 200 OK');
+  assert(Array.isArray(modelsData.providers), 'Returns providers array');
+  assert(modelsData.defaultModel === DEFAULT_CLOUDFLARE_MODEL, 'Default model matches Cloudflare Llama');
+  assert(modelsData.providers.some((p: any) => p.id === 'cloudflare' && p.isDefault), 'Cloudflare is listed as default provider');
+  assert(modelsData.providers.some((p: any) => p.id === 'openai' && p.isConfigured), 'OpenAI is recognized as configured when key present');
+  assert(Array.isArray(modelsData.models), 'Returns models catalog');
+  assert(modelsData.models.some((m: any) => m.id === 'orbit-agent-v2' && m.isDefault), 'Catalog contains default orbit-agent-v2');
+
   console.log(`\n========================================`);
   console.log(`All Tests Finished: ${passed} Passed, ${failed} Failed`);
   console.log(`========================================`);
