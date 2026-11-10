@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useWorkspace } from '../../context/WorkspaceContext';
+import { UserAvatar } from '../common/UserAvatar';
 import {
   Search,
   Plus,
@@ -256,18 +257,19 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
         </button>
 
         {/* Authentication Action / User Profile */}
+        {/* Authentication Action / User Profile */}
         {firebaseUser ? (
           <div className="flex items-center gap-2 ml-1">
             <div
-              onClick={() => setCurrentPage('settings')}
+              onClick={() => setCurrentPage('profile')}
               className="cursor-pointer shrink-0 flex items-center gap-2 group"
-              title={`Signed in as ${firebaseUser.email}`}
+              title={`Signed in as ${firebaseUser.email} (View Profile)`}
             >
-              <img
-                src={user.avatarUrl}
-                alt={user.name}
-                referrerPolicy="no-referrer"
-                className="w-7 h-7 rounded-full object-cover ring-1 ring-slate-300 dark:ring-neutral-700 group-hover:ring-indigo-500 transition-all"
+              <UserAvatar
+                user={user}
+                size="sm"
+                showAnimationRing={true}
+                className="group-hover:scale-105 transition-transform"
               />
               <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900 dark:text-neutral-300 dark:group-hover:text-white hidden lg:inline max-w-[120px] truncate">
                 {user.name}
@@ -282,7 +284,19 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-1.5 ml-1">
+          <div className="flex items-center gap-2 ml-1">
+            <div
+              onClick={() => setCurrentPage('profile')}
+              className="cursor-pointer shrink-0 flex items-center gap-1.5 group"
+              title="View Profile"
+            >
+              <UserAvatar
+                user={user}
+                size="sm"
+                showAnimationRing={true}
+                className="group-hover:scale-105 transition-transform"
+              />
+            </div>
             <button
               onClick={() => openAuthModal('login')}
               className="flex items-center gap-1.5 py-1.5 px-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition-colors shadow-xs cursor-pointer"

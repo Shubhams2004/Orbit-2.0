@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+  <defs>
+    <radialGradient id="qGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="70%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#082f49" />
+    </radialGradient>
+    <filter id="qGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="160" height="160" rx="80" fill="#020617" />
+
+  <!-- Outer Quantum Meridian Rings -->
+  <g transform="translate(80,80)">
+    <!-- Ring 0 deg -->
+    <ellipse rx="56" ry="56" fill="none" stroke="#0ea5e9" stroke-width="1.2" opacity="0.4" />
+    <!-- Meridian 1 -->
+    <ellipse rx="24" ry="56" fill="none" stroke="#38bdf8" stroke-width="1.5" opacity="0.6">
+      <animate attributeName="rx" values="56;0;56" dur="6s" repeatCount="indefinite" />
+    </ellipse>
+    <!-- Meridian 2 (phase-shifted) -->
+    <ellipse rx="44" ry="56" fill="none" stroke="#818cf8" stroke-width="1.5" opacity="0.6">
+      <animate attributeName="rx" values="0;56;0" dur="6s" repeatCount="indefinite" />
+    </ellipse>
+    <!-- Equator -->
+    <ellipse rx="56" ry="20" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.7">
+      <animate attributeName="ry" values="20;0;20" dur="8s" repeatCount="indefinite" />
+    </ellipse>
+  </g>
+
+  <!-- Central Quantum Core -->
+  <circle cx="80" cy="80" r="20" fill="url(#qGrad)" filter="url(#qGlow)">
+    <animate attributeName="r" values="18;23;18" dur="2.5s" repeatCount="indefinite" />
+  </circle>
+  <circle cx="80" cy="80" r="7" fill="#ffffff" filter="url(#qGlow)">
+    <animate attributeName="opacity" values="0.8;1;0.8" dur="1.2s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Orbital Data Stream Nodes -->
+  <circle cx="80" cy="24" r="3" fill="#38bdf8" filter="url(#qGlow)">
+    <animateTransform attributeName="transform" type="rotate" from="0 80 80" to="360 80 80" dur="5s" repeatCount="indefinite" />
+  </circle>
+  <circle cx="80" cy="136" r="3" fill="#818cf8" filter="url(#qGlow)">
+    <animateTransform attributeName="transform" type="rotate" from="0 80 80" to="360 80 80" dur="5s" repeatCount="indefinite" />
+  </circle>
+</svg>

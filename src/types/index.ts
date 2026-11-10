@@ -13,6 +13,9 @@ export interface User {
   avatarUrl: string;
   role: string;
   initials: string;
+  bio?: string;
+  statusMessage?: string;
+  avatarAnimation?: 'pulse' | 'glow' | 'spin' | 'orbit' | 'wave' | 'none';
 }
 
 export interface Task {

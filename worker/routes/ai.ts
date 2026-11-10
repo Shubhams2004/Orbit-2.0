@@ -2,6 +2,7 @@ import { Env, AuthenticatedUser } from '../types';
 import { jsonResponse, errorResponse } from '../utils/response';
 import { SearchManager } from '../services/search/manager';
 import { TavilySearchProvider } from '../services/search/tavily';
+import { DuckDuckGoSearchProvider } from '../services/search/duckduckgo';
 import { SearchEvidenceSource } from '../services/search/types';
 import { ModelProviderRegistry } from '../services/ai/registry';
 import { ModelMessage, ModelProviderError } from '../services/ai/types';
@@ -21,11 +22,16 @@ function getSearchManager(env: Env): SearchManager {
     return cachedSearchManager;
   }
 
-  let provider: TavilySearchProvider | null = null;
+  let provider: any = null;
   if (currentKey) {
     provider = new TavilySearchProvider({
       apiKey: currentKey,
       baseUrl: env.TAVILY_BASE_URL,
+      maxResults: 5,
+    });
+  } else {
+    // Resilient live web search provider retrieving real-time internet data without requiring API keys
+    provider = new DuckDuckGoSearchProvider({
       maxResults: 5,
     });
   }

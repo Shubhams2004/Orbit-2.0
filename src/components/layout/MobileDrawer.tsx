@@ -1,5 +1,6 @@
 import React from 'react';
 import { useWorkspace, PageView } from '../../context/WorkspaceContext';
+import { UserAvatar } from '../common/UserAvatar';
 import {
   LayoutDashboard,
   CheckSquare,
@@ -10,6 +11,7 @@ import {
   X,
   Plus,
   Globe,
+  User as UserIcon,
 } from 'lucide-react';
 
 interface MobileDrawerProps {
@@ -35,6 +37,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({ isOpen, onClose }) =
     { id: 'projects', label: 'Projects', icon: FolderGit2, count: projects.length },
     { id: 'agent', label: 'AI Chat', icon: Bot },
     { id: 'activity', label: 'Activity', icon: Activity },
+    { id: 'profile', label: 'User Profile', icon: UserIcon },
     { id: 'settings', label: 'Settings', icon: Settings },
     { id: 'landing', label: 'Landing Page', icon: Globe },
   ];
@@ -116,12 +119,14 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({ isOpen, onClose }) =
         </div>
 
         {/* User footer */}
-        <div className="pt-4 border-t border-slate-200 dark:border-neutral-800 flex items-center gap-3">
-          <img
-            src={user.avatarUrl}
-            alt={user.name}
-            referrerPolicy="no-referrer"
-            className="w-8 h-8 rounded-full object-cover ring-1 ring-slate-300 dark:ring-neutral-700"
+        <div
+          onClick={() => handleNav('profile')}
+          className="pt-4 border-t border-slate-200 dark:border-neutral-800 flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
+        >
+          <UserAvatar
+            user={user}
+            size="md"
+            showAnimationRing={true}
           />
           <div className="min-w-0 flex-1 truncate">
             <div className="text-xs font-medium text-slate-800 dark:text-neutral-200 truncate">{user.name}</div>

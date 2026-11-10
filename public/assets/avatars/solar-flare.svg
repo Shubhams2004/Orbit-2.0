@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+  <defs>
+    <radialGradient id="solarGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="45%" stop-color="#f97316" />
+      <stop offset="85%" stop-color="#dc2626" />
+      <stop offset="100%" stop-color="#450a0a" />
+    </radialGradient>
+    <filter id="solarFlare" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="160" height="160" rx="80" fill="#0c0702" />
+
+  <!-- Radiating Coronal Rays -->
+  <g transform="translate(80,80)" filter="url(#solarFlare)">
+    <g stroke="#f59e0b" stroke-width="2" opacity="0.6">
+      <line x1="0" y1="-65" x2="0" y2="-45" />
+      <line x1="46" y1="-46" x2="32" y2="-32" />
+      <line x1="65" y1="0" x2="45" y2="0" />
+      <line x1="46" y1="46" x2="32" y2="32" />
+      <line x1="0" y1="65" x2="0" y2="45" />
+      <line x1="-46" y1="46" x2="-32" y2="32" />
+      <line x1="-65" y1="0" x2="-45" y2="0" />
+      <line x1="-46" y1="-46" x2="-32" y2="-32" />
+      <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="20s" repeatCount="indefinite" />
+    </g>
+  </g>
+
+  <!-- Pulsing Corona Ring -->
+  <circle cx="80" cy="80" r="42" fill="none" stroke="#ea580c" stroke-width="2" stroke-dasharray="6 4" opacity="0.8" filter="url(#solarFlare)">
+    <animate attributeName="r" values="38;45;38" dur="3s" repeatCount="indefinite" />
+    <animateTransform attributeName="transform" type="rotate" from="360 80 80" to="0 80 80" dur="15s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Molten Core -->
+  <circle cx="80" cy="80" r="30" fill="url(#solarGlow)" filter="url(#solarFlare)">
+    <animate attributeName="r" values="28;33;28" dur="2.4s" repeatCount="indefinite" />
+  </circle>
+
+  <!-- Core White Flare Flare -->
+  <circle cx="80" cy="80" r="14" fill="#ffffff" opacity="0.95" filter="url(#solarFlare)">
+    <animate attributeName="r" values="12;16;12" dur="1.2s" repeatCount="indefinite" />
+    <animate attributeName="opacity" values="0.8;1;0.8" dur="1.2s" repeatCount="indefinite" />
+  </circle>
+</svg>

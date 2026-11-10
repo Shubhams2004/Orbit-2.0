@@ -11,6 +11,7 @@ import { formatFirebaseAuthError } from '../src/lib/firebase';
 import { parsePath, routeToPath } from '../src/context/WorkspaceContext';
 import { SearchManager } from '../worker/services/search/manager';
 import { TavilySearchProvider } from '../worker/services/search/tavily';
+import { DuckDuckGoSearchProvider } from '../worker/services/search/duckduckgo';
 import { ISearchProvider, SearchQueryResult } from '../worker/services/search/types';
 import { ModelProviderRegistry } from '../worker/services/ai/registry';
 import { CloudflareWorkersAiProvider, DEFAULT_CLOUDFLARE_MODEL } from '../worker/services/ai/providers/cloudflare';
@@ -1378,6 +1379,12 @@ async function runTests() {
   const settingsRoute = parsePath('/settings');
   assert(settingsRoute?.page === 'settings', 'Path "/settings" parses to settings view');
 
+  const profileRoute = parsePath('/profile');
+  assert(profileRoute?.page === 'profile', 'Path "/profile" parses to profile view');
+
+  const userProfileRoute = parsePath('/user-profile');
+  assert(userProfileRoute?.page === 'profile', 'Alias "/user-profile" parses to profile view');
+
   // Invalid routes handling (graceful fallback to landing)
   const invalidRoute1 = parsePath('/non-existent-page');
   assert(invalidRoute1 === null, 'Unrecognized path "/non-existent-page" returns null for landing fallback');
@@ -1395,6 +1402,7 @@ async function runTests() {
   assert(routeToPath('agent') === '/chat', 'routeToPath("agent") generates "/chat"');
   assert(routeToPath('activity') === '/activity', 'routeToPath("activity") generates "/activity"');
   assert(routeToPath('settings') === '/settings', 'routeToPath("settings") generates "/settings"');
+  assert(routeToPath('profile') === '/profile', 'routeToPath("profile") generates "/profile"');
 
   // -------------------------------------------------------------
   // 13. Testing Orbit 2.0 Web Intelligence (Search Detection, Tavily Adapter, Grounding, Caching)
@@ -1578,6 +1586,65 @@ async function runTests() {
       Boolean(quotaData?.notice && quotaData.notice.includes('quota')),
       'Graceful diagnostic notice returned in webSearch metadata'
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  // Test 13.6: DuckDuckGo Search Provider Unit & Live Fallback
+  const ddgProvider = new DuckDuckGoSearchProvider({ maxResults: 3 });
+  assert(ddgProvider.name === 'duckduckgo', 'DuckDuckGo provider name is "duckduckgo"');
+
+  const emptyDdgResult = await ddgProvider.search('');
+  assert(emptyDdgResult.sources.length === 0, 'Empty query returns 0 sources');
+
+  // Mock html fetch for DuckDuckGo
+  globalThis.fetch = async (input: any, init?: any): Promise<Response> => {
+    const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input?.url || '';
+    if (urlStr.includes('duckduckgo.com/html')) {
+      const mockHtml = `
+        <div class="result results_links">
+          <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Forbitwork.io%2Fdocs%2F2026&amp;rut=123">Orbit 2.0 Edge Runtime Release</a>
+          <a class="result__snippet" href="#">Orbit 2.0 introduces native multi-provider AI routing and live web intelligence in 2026.</a>
+        </div>
+      `;
+      return new Response(mockHtml, { status: 200, headers: { 'Content-Type': 'text/html' } });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const ddgResult = await ddgProvider.search('Orbit 2.0 release 2026');
+    assert(ddgResult.sources.length === 1, 'DuckDuckGo provider parses 1 source from HTML');
+    assert(ddgResult.sources[0].url === 'https://orbitwork.io/docs/2026', 'Decoded redirect URL correctly');
+    assert(ddgResult.sources[0].title === 'Orbit 2.0 Edge Runtime Release', 'Extracted title correctly');
+    assert(ddgResult.sources[0].content.includes('Orbit 2.0 introduces'), 'Extracted snippet correctly');
+
+    // Test live chat fallback with zero Tavily key (uses DuckDuckGo provider)
+    const noTavilyEnv: Env = {
+      ...aiProdEnv, // lacks TAVILY_API_KEY
+    };
+
+    const noKeyChatRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${validFbToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'What are the latest 2026 features?',
+          webSearch: true,
+        }),
+      }),
+      noTavilyEnv
+    );
+
+    const noKeyChatJson: any = await noKeyChatRes.json();
+    const noKeyData = noKeyChatJson.data || noKeyChatJson;
+    assert(noKeyChatRes.status === 200, 'Live web search succeeds without Tavily key via fallback');
+    assert(noKeyData.webSearch?.triggered === true, 'Web search was triggered on live request');
+    assert(noKeyData.webSearch?.sourcesCount === 1, 'Retrieved source via DuckDuckGo fallback');
+    assert(noKeyData.webSearch?.sources[0].url === 'https://orbitwork.io/docs/2026', 'Source URL present in response metadata');
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useWorkspace, PageView } from '../../context/WorkspaceContext';
+import { UserAvatar } from '../common/UserAvatar';
 import {
   LayoutDashboard,
   CheckSquare,
@@ -13,6 +14,7 @@ import {
   LogOut,
   ExternalLink,
   Globe,
+  User as UserIcon,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -54,6 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'projects', label: 'Projects', icon: FolderGit2, count: projects.length },
     { id: 'agent', label: 'AI Chat', icon: Bot },
     { id: 'activity', label: 'Activity', icon: Activity },
+    { id: 'profile', label: 'User Profile', icon: UserIcon },
     { id: 'settings', label: 'Settings', icon: Settings },
     { id: 'landing', label: 'Landing Page', icon: Globe },
   ];
@@ -167,11 +170,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             isCollapsed ? 'justify-center' : ''
           }`}
         >
-          <img
-            src={user.avatarUrl}
-            alt={user.name}
-            referrerPolicy="no-referrer"
-            className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-slate-300 dark:ring-neutral-700"
+          <UserAvatar
+            user={user}
+            size={isCollapsed ? 'sm' : 'md'}
+            showAnimationRing={true}
           />
           {!isCollapsed && (
             <div className="min-w-0 flex-1 truncate text-left">
@@ -197,9 +199,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={() => {
                 setIsUserMenuOpen(false);
-                handleNavClick('settings');
+                handleNavClick('profile');
               }}
               className="w-full text-left px-2.5 py-2 mt-1 rounded-lg hover:bg-slate-100 text-slate-700 hover:text-slate-900 dark:hover:bg-neutral-800 dark:text-neutral-300 dark:hover:text-white flex items-center justify-between"
+            >
+              <span>User Profile</span>
+              <UserIcon className="w-3.5 h-3.5 text-indigo-500" />
+            </button>
+            <button
+              onClick={() => {
+                setIsUserMenuOpen(false);
+                handleNavClick('settings');
+              }}
+              className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-slate-100 text-slate-700 hover:text-slate-900 dark:hover:bg-neutral-800 dark:text-neutral-300 dark:hover:text-white flex items-center justify-between"
             >
               <span>Preferences</span>
               <Settings className="w-3.5 h-3.5 text-slate-400 dark:text-neutral-400" />

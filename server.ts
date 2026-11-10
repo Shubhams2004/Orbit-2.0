@@ -42,6 +42,13 @@ async function startServer() {
     DB: d1,
     ENVIRONMENT: isProduction ? 'production' : 'development',
     API_VERSION: 'v1',
+    FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || 'orbit-2-auth',
+    ALLOW_DEV_TOKENS: process.env.ALLOW_DEV_TOKENS || (isProduction ? 'false' : 'true'),
+    TAVILY_API_KEY: process.env.TAVILY_API_KEY,
+    TAVILY_BASE_URL: process.env.TAVILY_BASE_URL,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
   };
 
   // 2. Request body parsing

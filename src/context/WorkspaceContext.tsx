@@ -49,7 +49,8 @@ export type PageView =
   | 'project_detail'
   | 'agent' // AI Chat & Agent Workspace
   | 'activity'
-  | 'settings';
+  | 'settings'
+  | 'profile';
 
 interface ConfirmDialogState {
   isOpen: boolean;
@@ -69,6 +70,7 @@ interface WorkspaceContextType {
 
   // User & Settings
   user: User;
+  updateUser: (updated: Partial<User>) => void;
   settings: UserSettings;
   updateSettings: (newSettings: Partial<UserSettings>) => void;
 
@@ -220,6 +222,9 @@ export function parsePath(pathname: string): RouteState | null {
   if (clean === '/settings') {
     return { page: 'settings', projectId: null };
   }
+  if (clean === '/profile' || clean === '/user-profile') {
+    return { page: 'profile', projectId: null };
+  }
 
   return null;
 }
@@ -242,6 +247,8 @@ export function routeToPath(page: PageView, projectId?: string | null): string {
       return '/activity';
     case 'settings':
       return '/settings';
+    case 'profile':
+      return '/profile';
     default:
       return '/';
   }
@@ -312,7 +319,25 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [settings, setSettings] = useState<UserSettings>(() => settingsService.getSettings());
 
   // User & Firebase Authentication State
-  const [user, setUser] = useState<User>(INITIAL_USER);
+  const [user, setUser] = useState<User>(() => {
+    try {
+      const stored = localStorage.getItem('orbit_user_profile_v2');
+      if (stored) {
+        return { ...INITIAL_USER, ...JSON.parse(stored) };
+      }
+    } catch {}
+    return INITIAL_USER;
+  });
+
+  const updateUser = (updated: Partial<User>) => {
+    setUser((prev) => {
+      const next = { ...prev, ...updated };
+      try {
+        localStorage.setItem('orbit_user_profile_v2', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
@@ -1219,6 +1244,7 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
         selectedProjectId,
         navigateToProjectDetail,
         user,
+        updateUser,
         settings,
         updateSettings,
         // Firebase Authentication

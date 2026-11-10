@@ -15,6 +15,7 @@ import { ProjectDetailView } from './views/ProjectDetailView';
 import { ChatTerminalView } from './views/ChatTerminalView';
 import { ActivityView } from './views/ActivityView';
 import { SettingsView } from './views/SettingsView';
+import { ProfileView } from './views/ProfileView';
 import { QuickCreateModal } from './components/modals/QuickCreateModal';
 import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
 import { ConfirmModal } from './components/modals/ConfirmModal';
@@ -71,6 +72,8 @@ const WorkspaceShell: React.FC = () => {
         return <ActivityView />;
       case 'settings':
         return <SettingsView />;
+      case 'profile':
+        return <ProfileView />;
       default:
         return <OverviewView />;
     }
