@@ -460,6 +460,20 @@ export async function handleConnectAiProvider(
     return errorResponse('VALIDATION_ERROR', 'Field "apiKey" is required and cannot be empty.', 400);
   }
 
+  // Ensure user record exists in users table if table is present
+  try {
+    const now = new Date().toISOString();
+    const userDisplayName = user.displayName?.trim() || 'Orbit User';
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO users (id, display_name, email, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)`
+    )
+      .bind(user.id, userDisplayName, user.email || null, now, now)
+      .run();
+  } catch {
+    // Non-fatal if users table is not ready
+  }
+
   try {
     const result = await saveUserCredential(
       env.DB,

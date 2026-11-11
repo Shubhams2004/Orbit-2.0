@@ -52,25 +52,43 @@ export const SUPPORTED_BYOK_PROVIDERS: Array<{
 /**
  * Ensures the user_ai_credentials table exists in D1.
  * Idempotent, safe to run during any Worker request.
+ * Uses individual prepare().run() statements rather than multi-statement db.exec()
+ * to prevent D1_EXEC_ERROR or incomplete input parser issues in Cloudflare D1.
  */
 export async function ensureCredentialsTable(db: D1Database): Promise<void> {
   try {
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS user_ai_credentials (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        provider TEXT NOT NULL CHECK (provider IN ('gemini', 'openai', 'anthropic')),
-        encrypted_key TEXT NOT NULL,
-        key_hint TEXT NOT NULL,
-        preferred_model TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        UNIQUE(user_id, provider)
-      );
-      CREATE INDEX IF NOT EXISTS idx_user_ai_credentials_user ON user_ai_credentials(user_id);
-    `);
-  } catch (err) {
-    // Already exists or local wrapper
+    await db
+      .prepare(
+        `CREATE TABLE IF NOT EXISTS user_ai_credentials (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          provider TEXT NOT NULL,
+          encrypted_key TEXT NOT NULL,
+          key_hint TEXT NOT NULL,
+          preferred_model TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(user_id, provider)
+        )`
+      )
+      .run();
+
+    await db
+      .prepare(
+        `CREATE INDEX IF NOT EXISTS idx_user_ai_credentials_user ON user_ai_credentials(user_id)`
+      )
+      .run();
+  } catch (err: unknown) {
+    console.error('[BYOK] Error ensuring user_ai_credentials table:', err);
+    try {
+      if (typeof (db as any).exec === 'function') {
+        await (db as any).exec(
+          'CREATE TABLE IF NOT EXISTS user_ai_credentials (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, provider TEXT NOT NULL, encrypted_key TEXT NOT NULL, key_hint TEXT NOT NULL, preferred_model TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(user_id, provider));'
+        );
+      }
+    } catch (execErr) {
+      console.error('[BYOK] Fallback db.exec also failed:', execErr);
+    }
   }
 }
 
@@ -152,18 +170,40 @@ export async function saveUserCredential(
 
   const modelToSave = preferredModel?.trim() || validProvider.defaultModel;
 
-  await db
-    .prepare(
-      `INSERT INTO user_ai_credentials (id, user_id, provider, encrypted_key, key_hint, preferred_model, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(user_id, provider) DO UPDATE SET
-         encrypted_key = excluded.encrypted_key,
-         key_hint = excluded.key_hint,
-         preferred_model = excluded.preferred_model,
-         updated_at = excluded.updated_at`
-    )
-    .bind(id, userId, cleanProvider, encryptedKey, keyHint, modelToSave, now, now)
-    .run();
+  try {
+    await db
+      .prepare(
+        `INSERT INTO user_ai_credentials (id, user_id, provider, encrypted_key, key_hint, preferred_model, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(user_id, provider) DO UPDATE SET
+           encrypted_key = excluded.encrypted_key,
+           key_hint = excluded.key_hint,
+           preferred_model = excluded.preferred_model,
+           updated_at = excluded.updated_at`
+      )
+      .bind(id, userId, cleanProvider, encryptedKey, keyHint, modelToSave, now, now)
+      .run();
+  } catch (insertErr: unknown) {
+    const errMsg = String(insertErr);
+    if (errMsg.includes('no such table') || errMsg.includes('SQLITE_ERROR')) {
+      // Recreate table explicitly and retry insertion
+      await ensureCredentialsTable(db);
+      await db
+        .prepare(
+          `INSERT INTO user_ai_credentials (id, user_id, provider, encrypted_key, key_hint, preferred_model, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(user_id, provider) DO UPDATE SET
+             encrypted_key = excluded.encrypted_key,
+             key_hint = excluded.key_hint,
+             preferred_model = excluded.preferred_model,
+             updated_at = excluded.updated_at`
+        )
+        .bind(id, userId, cleanProvider, encryptedKey, keyHint, modelToSave, now, now)
+        .run();
+    } else {
+      throw insertErr;
+    }
+  }
 
   return {
     provider: cleanProvider,

@@ -2043,6 +2043,28 @@ async function runTests() {
   const hintAnthropic = generateKeyHint('sk-ant-1234567890abcdefghijklmnopqr');
   assert(hintAnthropic.startsWith('sk-ant-...'), 'Anthropic hint preserves standard prefix');
 
+  // Test 15.1b: Fresh database auto-provisioning test (guards against "no such table: user_ai_credentials: SQLITE_ERROR")
+  const freshSqlite = new DatabaseSync(':memory:');
+  const freshD1 = createTestD1(freshSqlite);
+  freshSqlite.exec(migration1);
+  freshSqlite.exec(migration2);
+  // Notice migration 3 is deliberately NOT executed here to test on-the-fly table auto-creation
+
+  const autoProvisionResult = await saveUserCredential(
+    freshD1,
+    'user_fresh_test',
+    'gemini',
+    sampleRawKey,
+    'gemini-2.5-flash',
+    { BYOK_ENCRYPTION_KEY: byokTestSecret } as any
+  );
+  assert(autoProvisionResult.provider === 'gemini', 'saveUserCredential auto-creates user_ai_credentials table without throwing no such table error');
+  assert(autoProvisionResult.keyHint === hintGemini, 'auto-provisioned credential has correct keyHint');
+
+  const freshCredentials = await getUserCredentials(freshD1, 'user_fresh_test', { BYOK_ENCRYPTION_KEY: byokTestSecret } as any);
+  assert(freshCredentials.has('gemini'), 'getUserCredentials reads from auto-created user_ai_credentials table');
+  assert(freshCredentials.get('gemini')?.apiKey === sampleRawKey, 'Decrypted key matches on auto-created table');
+
   // Test 15.2: GET /api/v1/ai/providers returns supported providers
   const providersRes = await worker.fetch(
     new Request('https://orbit.internal/api/v1/ai/providers', {
