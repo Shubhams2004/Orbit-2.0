@@ -25,6 +25,7 @@ import {
 import {
   handleAiChat,
   handleGetAiModels,
+  handleDiscoverAiModels,
   handleGetAiProviders,
   handleConnectAiProvider,
   handleDisconnectAiProvider,
@@ -149,7 +150,12 @@ export default {
       }
 
       // GET /api/v1/ai/models
+      // POST/GET /api/v1/ai/models/discover
       if (segments[0] === 'ai' && segments[1] === 'models') {
+        if (segments[2] === 'discover') {
+          if (method === 'POST' || method === 'GET') return await handleDiscoverAiModels(request, env, user);
+          return errorResponse('METHOD_NOT_ALLOWED', `Method ${method} not allowed on ${pathname}`, 405);
+        }
         if (method === 'GET') return await handleGetAiModels(request, env, user);
         return errorResponse('METHOD_NOT_ALLOWED', `Method ${method} not allowed on ${pathname}`, 405);
       }

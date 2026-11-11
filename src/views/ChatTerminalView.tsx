@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { ChatSidebar } from '../components/chat/ChatSidebar';
 import { ModelSelector } from '../components/chat/ModelSelector';
 import { ChatMessageItem } from '../components/chat/ChatMessageItem';
 import { MessageComposer } from '../components/chat/MessageComposer';
 import { ByokConnectModal } from '../components/chat/ByokConnectModal';
+import { modelProviderService } from '../services/modelProviderService';
 import { AiOrb } from '../components/common/AiOrb';
 import {
   Sparkles,
@@ -62,6 +63,10 @@ export const ChatTerminalView: React.FC = () => {
     if (provider) setByokModalProvider(provider);
     setIsByokModalOpen(true);
   };
+
+  const modelLifecycle = useMemo(() => {
+    return modelProviderService.checkModelLifecycle(selectedModelId);
+  }, [selectedModelId]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -256,6 +261,35 @@ export const ChatTerminalView: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Model Lifecycle / Availability Warning Banner */}
+        {(!modelLifecycle.isAvailable || modelLifecycle.isDeprecated) && (
+          <div className="px-4 py-2.5 bg-amber-50/90 dark:bg-amber-950/40 border-b border-amber-200/80 dark:border-amber-900/50 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-900 dark:text-amber-200">
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="truncate">{modelLifecycle.notice}</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {modelLifecycle.replacementId ? (
+                <button
+                  type="button"
+                  onClick={() => setSelectedModelId(modelLifecycle.replacementId!)}
+                  className="px-2.5 py-1 rounded-lg font-semibold bg-amber-600 text-white hover:bg-amber-700 text-[11px] transition-colors cursor-pointer"
+                >
+                  Switch to Active Model
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleOpenByokModal()}
+                  className="px-2.5 py-1 rounded-lg font-semibold bg-amber-600 text-white hover:bg-amber-700 text-[11px] transition-colors cursor-pointer"
+                >
+                  Connect API Key
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Message Stream Area with Scroll Container Hook */}
         <div

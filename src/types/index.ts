@@ -178,17 +178,32 @@ export interface ProviderConnection {
   updatedAt?: string;
 }
 
+export type ModelCategory = 'fast' | 'balanced' | 'reasoning' | 'coding' | 'specialized';
+export type ModelStatus = 'stable' | 'preview' | 'experimental' | 'deprecated';
+export type ModelAvailability = 'available' | 'requires_key' | 'unavailable' | 'deprecated';
+
 export interface ModelOption {
   id: string;
   name: string;
-  provider: 'Anthropic' | 'OpenAI' | 'Google' | 'Orbit Core';
+  provider: 'Anthropic' | 'OpenAI' | 'Google' | 'Orbit Core' | string;
   providerKey?: 'cloudflare' | 'gemini' | 'openai' | 'anthropic';
   badge: string;
   description: string;
   contextWindow: string;
+  contextTokens?: number;
+  maxOutputTokens?: number;
+  category?: ModelCategory;
+  categoryLabel?: string;
+  modalities?: Array<'text' | 'image' | 'audio' | 'video'>;
+  reasoningCapability?: 'standard' | 'advanced' | 'hybrid' | 'agentic';
+  status?: ModelStatus;
   isAgentCapable: boolean;
   isDefault?: boolean;
   isConfigured?: boolean;
+  isDiscovered?: boolean;
+  availability?: ModelAvailability;
+  deprecatedNotice?: string;
+  recommendedUse?: string;
 }
 
 export interface UserSettings {

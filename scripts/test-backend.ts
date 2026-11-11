@@ -21,6 +21,14 @@ import { AnthropicModelProvider } from '../worker/services/ai/providers/anthropi
 import { ModelProviderError } from '../worker/services/ai/types';
 import { encryptApiKey, decryptApiKey, generateKeyHint } from '../worker/utils/crypto';
 import { getUserCredentials, saveUserCredential, deleteUserCredential, listUserProviders } from '../worker/services/ai/credentials';
+import {
+  getUnifiedModelCatalog,
+  discoverGeminiModels,
+  discoverOpenAiModels,
+  discoverAnthropicModels,
+  DEPRECATED_MODEL_MAP,
+  OFFICIAL_MODEL_CATALOG,
+} from '../worker/services/ai/catalog';
 
 async function signRs256Jwt(
   header: Record<string, unknown>,
@@ -2260,6 +2268,160 @@ async function runTests() {
   const defaultChatJson: any = await defaultChatRes.json();
   const defaultChatData = defaultChatJson.data || defaultChatJson;
   assert(defaultChatData.provider === 'cloudflare', 'Default execution provider is cloudflare');
+
+  // =========================================================================
+  // Section 16: Orbit 2.0 Dynamic Model Discovery, Categorization, & Lifecycle
+  // =========================================================================
+  console.log('\n--- Section 16: Orbit 2.0 Dynamic Model Discovery, Categorization, & Lifecycle ---');
+
+  // Test 16.1: Curated Official Model Catalog categories and verified metadata
+  assert(OFFICIAL_MODEL_CATALOG.length >= 10, 'Catalog contains at least 10 official production models');
+  const fastModels = OFFICIAL_MODEL_CATALOG.filter((m) => m.category === 'fast');
+  const balancedModels = OFFICIAL_MODEL_CATALOG.filter((m) => m.category === 'balanced');
+  const reasoningModels = OFFICIAL_MODEL_CATALOG.filter((m) => m.category === 'reasoning');
+  const codingModels = OFFICIAL_MODEL_CATALOG.filter((m) => m.category === 'coding');
+  const specializedModels = OFFICIAL_MODEL_CATALOG.filter((m) => m.category === 'specialized');
+
+  assert(fastModels.length >= 2, 'Has fast category models (e.g. Orbit Core, GPT-4o mini, Haiku)');
+  assert(balancedModels.length >= 2, 'Has balanced category models (e.g. Gemini 2.5 Flash, GPT-4o)');
+  assert(reasoningModels.length >= 2, 'Has advanced reasoning models (e.g. o3-mini, o1, Gemini 2.5 Pro)');
+  assert(codingModels.length >= 2, 'Has coding & agentic models (e.g. Claude 3.7 Sonnet, Claude 3.5 Sonnet)');
+  assert(specializedModels.length >= 1, 'Has specialized models (e.g. Gemini 3.8 Flash preview)');
+
+  // Verify verified context windows
+  const geminiFlash = OFFICIAL_MODEL_CATALOG.find((m) => m.id === 'gemini-2.5-flash');
+  assert(Boolean(geminiFlash && geminiFlash.contextWindow === '1M' && geminiFlash.contextTokens === 1048576), 'Gemini 2.5 Flash has verified 1M context');
+  const geminiPro = OFFICIAL_MODEL_CATALOG.find((m) => m.id === 'gemini-2.5-pro');
+  assert(Boolean(geminiPro && geminiPro.contextWindow === '2M' && geminiPro.contextTokens === 2097152), 'Gemini 2.5 Pro has verified 2M context');
+  const claude37 = OFFICIAL_MODEL_CATALOG.find((m) => m.id === 'claude-3-7-sonnet');
+  assert(Boolean(claude37 && claude37.contextWindow === '200k' && claude37.reasoningCapability === 'hybrid'), 'Claude 3.7 Sonnet has verified 200k context & hybrid reasoning');
+
+  // Verify stable vs preview status distinction
+  assert(Boolean(geminiFlash?.status === 'stable'), 'Gemini 2.5 Flash is flagged stable');
+  const gemini38 = OFFICIAL_MODEL_CATALOG.find((m) => m.id === 'gemini-3.8-flash');
+  assert(Boolean(gemini38?.status === 'preview'), 'Gemini 3.8 Flash is clearly distinguished as preview');
+
+  // Test 16.2: GET /api/v1/ai/models returns rich metadata and catalog timestamp
+  const upgradedModelsRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/models', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+      },
+    }),
+    aiProdEnv
+  );
+  const upgradedModelsJson: any = await upgradedModelsRes.json();
+  const upgradedData = upgradedModelsJson.data || upgradedModelsJson;
+  assert(upgradedModelsRes.status === 200, 'GET /api/v1/ai/models returns 200 OK');
+  assert(typeof upgradedData.catalogUpdatedAt === 'string', 'Returns catalogUpdatedAt ISO string');
+  assert(typeof upgradedData.discoveryStatus === 'object', 'Returns discoveryStatus summary');
+  assert(typeof upgradedData.deprecated === 'object', 'Returns deprecated models lifecycle dictionary');
+  assert(upgradedData.models.some((m: any) => m.id === 'o3-mini' && m.category === 'reasoning'), 'o3-mini returned with reasoning category');
+  assert(upgradedData.models.some((m: any) => m.id === 'claude-3-7-sonnet' && m.category === 'coding'), 'claude-3-7-sonnet returned with coding category');
+
+  // Test 16.3: POST /api/v1/ai/models/discover executes discovery endpoint
+  const discoverRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/models/discover', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+      },
+    }),
+    aiProdEnv
+  );
+  assert(discoverRes.status === 200, 'POST /api/v1/ai/models/discover returns 200 OK');
+  const discoverJson: any = await discoverRes.json();
+  const discoverData = discoverJson.data || discoverJson;
+  assert(discoverData.success === true, 'Discovery result reports success');
+  assert(Array.isArray(discoverData.models), 'Returns verified models list from discovery');
+
+  // Test 16.4: Dynamic Model Discovery with Mocked Official Provider APIs
+  let interceptedGeminiDiscovery = false;
+  let interceptedOpenAiDiscovery = false;
+  let interceptedAnthropicDiscovery = false;
+
+  globalThis.fetch = async (input: any, init?: any): Promise<Response> => {
+    const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input?.url || '';
+    if (urlStr.includes('generativelanguage.googleapis.com/v1beta/models')) {
+      interceptedGeminiDiscovery = true;
+      return new Response(
+        JSON.stringify({
+          models: [
+            { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
+            { name: 'models/gemini-2.5-pro', supportedGenerationMethods: ['generateContent'] },
+            { name: 'models/gemini-embedding-001', supportedGenerationMethods: ['embedContent'] },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    if (urlStr.includes('api.openai.com/v1/models')) {
+      interceptedOpenAiDiscovery = true;
+      return new Response(
+        JSON.stringify({
+          data: [
+            { id: 'gpt-4o', object: 'model' },
+            { id: 'o3-mini', object: 'model' },
+            { id: 'text-embedding-3-small', object: 'model' },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    if (urlStr.includes('api.anthropic.com/v1/models')) {
+      interceptedAnthropicDiscovery = true;
+      return new Response(
+        JSON.stringify({
+          data: [
+            { id: 'claude-3-7-sonnet-20250219', type: 'model' },
+            { id: 'claude-3-5-sonnet-20241022', type: 'model' },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const geminiModels = await discoverGeminiModels('fake-gemini-key');
+    assert(interceptedGeminiDiscovery, 'Invoked official Google Gemini models discovery endpoint');
+    assert(geminiModels.includes('gemini-2.5-flash'), 'Discovered gemini-2.5-flash');
+    assert(!geminiModels.includes('gemini-embedding-001'), 'Filtered out non-generateContent models');
+
+    const openAiModels = await discoverOpenAiModels('fake-openai-key');
+    assert(interceptedOpenAiDiscovery, 'Invoked official OpenAI models discovery endpoint');
+    assert(openAiModels.includes('gpt-4o'), 'Discovered gpt-4o');
+    assert(!openAiModels.includes('text-embedding-3-small'), 'Filtered out non-chat embedding models');
+
+    const anthropicModels = await discoverAnthropicModels('fake-anthropic-key');
+    assert(interceptedAnthropicDiscovery, 'Invoked official Anthropic models discovery endpoint');
+    assert(anthropicModels.some((id) => id.startsWith('claude-3-7-sonnet')), 'Discovered Claude 3.7 Sonnet');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  // Test 16.5: Model Lifecycle & Deprecation Handling in AI Chat
+  const deprecatedChatRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: 'Hello with legacy model',
+        model: 'gpt-3.5-turbo',
+      }),
+    }),
+    aiProdEnv
+  );
+  assert(deprecatedChatRes.status === 200, 'Deprecated model request succeeds with graceful fallback (200 OK)');
+  const deprecatedChatJson: any = await deprecatedChatRes.json();
+  const deprecatedChatData = deprecatedChatJson.data || deprecatedChatJson;
+  assert(typeof deprecatedChatData.deprecationNotice === 'string', 'Returns clear deprecation notice to client');
+  assert(deprecatedChatData.deprecationNotice.includes('GPT-3.5 Turbo is legacy'), 'Notice identifies retired model and replacement');
 
   console.log(`\n========================================`);
   console.log(`All Tests Finished: ${passed} Passed, ${failed} Failed`);

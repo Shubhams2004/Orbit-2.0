@@ -32,7 +32,13 @@ export class AnthropicModelProvider implements IModelProvider {
       );
     }
 
-    const targetModel = options.modelId || 'claude-3-7-sonnet-20250219';
+    const requested = options.modelId || 'claude-3-7-sonnet-20250219';
+    const aliasMap: Record<string, string> = {
+      'claude-3-7-sonnet': 'claude-3-7-sonnet-20250219',
+      'claude-3-5-sonnet': 'claude-3-5-sonnet-20241022',
+      'claude-3-5-haiku': 'claude-3-5-haiku-20241022',
+    };
+    const targetModel = aliasMap[requested] || requested;
 
     // Separate system messages
     const systemMessages = options.messages.filter((m) => m.role === 'system');
@@ -95,7 +101,7 @@ export class AnthropicModelProvider implements IModelProvider {
     return {
       text: textContent.trim(),
       provider: this.id,
-      modelId: targetModel,
+      modelId: options.modelId || targetModel,
       finishReason: data?.stop_reason,
       usage: {
         promptTokens: data?.usage?.input_tokens,

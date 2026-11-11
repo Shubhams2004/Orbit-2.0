@@ -33,19 +33,19 @@ export const SUPPORTED_BYOK_PROVIDERS: Array<{
     id: 'gemini',
     name: 'Google Gemini',
     defaultModel: 'gemini-2.5-flash',
-    supportedModels: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+    supportedModels: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite', 'gemini-3.8-flash'],
   },
   {
     id: 'openai',
     name: 'OpenAI',
     defaultModel: 'gpt-4o',
-    supportedModels: ['gpt-4o', 'o3-mini', 'gpt-4o-mini'],
+    supportedModels: ['gpt-4o', 'gpt-4o-mini', 'o3-mini', 'o1'],
   },
   {
     id: 'anthropic',
     name: 'Anthropic',
     defaultModel: 'claude-3-7-sonnet',
-    supportedModels: ['claude-3-7-sonnet', 'claude-3-5-sonnet'],
+    supportedModels: ['claude-3-7-sonnet', 'claude-3-5-sonnet', 'claude-3-5-haiku'],
   },
 ];
 

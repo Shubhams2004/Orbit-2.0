@@ -14,6 +14,10 @@ import {
   listUserProviders,
   SUPPORTED_BYOK_PROVIDERS,
 } from '../services/ai/credentials';
+import {
+  getUnifiedModelCatalog,
+  DEPRECATED_MODEL_MAP,
+} from '../services/ai/catalog';
 
 const WORKERS_AI_MODEL = DEFAULT_CLOUDFLARE_MODEL;
 const BASE_SYSTEM_PROMPT =
@@ -106,6 +110,14 @@ export async function handleAiChat(
       : typeof body.modelId === 'string' && body.modelId.trim()
       ? body.modelId.trim()
       : undefined;
+
+  // Lifecycle check: detect deprecated/retired models and substitute with official active replacement
+  let targetModelId = requestedModel;
+  let deprecationNotice: string | undefined = undefined;
+  if (targetModelId && DEPRECATED_MODEL_MAP[targetModelId]) {
+    deprecationNotice = DEPRECATED_MODEL_MAP[targetModelId].notice;
+    targetModelId = DEPRECATED_MODEL_MAP[targetModelId].replacementId;
+  }
 
   // Explicit web search mode requested by client ('auto' | boolean)
   const webSearchMode = body.webSearch === true ? true : body.webSearch === false ? false : undefined;
@@ -266,7 +278,7 @@ export async function handleAiChat(
     const execResult = await modelRegistry.execute({
       messages: aiMessages as ModelMessage[],
       maxTokens: 1024,
-      modelId: requestedModel,
+      modelId: targetModelId,
       allowFallback: body.allowFallback !== false,
     });
 
@@ -329,6 +341,7 @@ export async function handleAiChat(
       model: executedModel,
       provider: executedProvider,
       fallbackUsed,
+      deprecationNotice,
       webSearch: {
         triggered: requiresSearch,
         sourcesCount: searchSources.length,
@@ -347,6 +360,38 @@ export async function handleAiChat(
 }
 
 export async function handleGetAiModels(
+  request: Request,
+  env: Env,
+  user: AuthenticatedUser
+): Promise<Response> {
+  const userCredentials = await getUserCredentials(env.DB, user.id, env);
+  const modelRegistry = ModelProviderRegistry.forUser(env, userCredentials);
+
+  const url = new URL(request.url);
+  const shouldDiscover = url.searchParams.get('discover') === 'true';
+
+  const catalogResult = await getUnifiedModelCatalog(env, userCredentials, {
+    performLiveDiscovery: shouldDiscover,
+  });
+
+  return jsonResponse(
+    {
+      providers: modelRegistry.listProviders(),
+      defaultModel: DEFAULT_CLOUDFLARE_MODEL,
+      catalogUpdatedAt: catalogResult.catalogUpdatedAt,
+      discoveryStatus: catalogResult.discoveryStatus,
+      models: catalogResult.models,
+      deprecated: DEPRECATED_MODEL_MAP,
+    },
+    200
+  );
+}
+
+/**
+ * POST /api/v1/ai/models/discover
+ * Explicitly triggers real-time discovery of available models across user's connected BYOK providers.
+ */
+export async function handleDiscoverAiModels(
   _request: Request,
   env: Env,
   user: AuthenticatedUser
@@ -354,64 +399,18 @@ export async function handleGetAiModels(
   const userCredentials = await getUserCredentials(env.DB, user.id, env);
   const modelRegistry = ModelProviderRegistry.forUser(env, userCredentials);
 
-  const isGeminiConfigured = Boolean(
-    userCredentials.has('gemini') || (env.GEMINI_API_KEY && env.GEMINI_API_KEY.trim().length > 0)
-  );
-  const isOpenAiConfigured = Boolean(
-    userCredentials.has('openai') || (env.OPENAI_API_KEY && env.OPENAI_API_KEY.trim().length > 0)
-  );
-  const isAnthropicConfigured = Boolean(
-    userCredentials.has('anthropic') || (env.ANTHROPIC_API_KEY && env.ANTHROPIC_API_KEY.trim().length > 0)
-  );
+  const catalogResult = await getUnifiedModelCatalog(env, userCredentials, {
+    performLiveDiscovery: true,
+  });
 
   return jsonResponse(
     {
+      success: true,
       providers: modelRegistry.listProviders(),
       defaultModel: DEFAULT_CLOUDFLARE_MODEL,
-      models: [
-        {
-          id: 'orbit-agent-v2',
-          name: 'Llama 3.1 8B Instruct Fast',
-          provider: 'cloudflare',
-          isDefault: true,
-          isConfigured: Boolean(env.AI),
-        },
-        {
-          id: 'gemini-2.5-flash',
-          name: 'Gemini 2.5 Flash',
-          provider: 'gemini',
-          isDefault: false,
-          isConfigured: isGeminiConfigured,
-        },
-        {
-          id: 'gemini-2.5-pro',
-          name: 'Gemini 2.5 Pro',
-          provider: 'gemini',
-          isDefault: false,
-          isConfigured: isGeminiConfigured,
-        },
-        {
-          id: 'gpt-4o',
-          name: 'GPT-4o',
-          provider: 'openai',
-          isDefault: false,
-          isConfigured: isOpenAiConfigured,
-        },
-        {
-          id: 'o3-mini',
-          name: 'o3-mini',
-          provider: 'openai',
-          isDefault: false,
-          isConfigured: isOpenAiConfigured,
-        },
-        {
-          id: 'claude-3-7-sonnet',
-          name: 'Claude 3.7 Sonnet',
-          provider: 'anthropic',
-          isDefault: false,
-          isConfigured: isAnthropicConfigured,
-        },
-      ],
+      catalogUpdatedAt: catalogResult.catalogUpdatedAt,
+      discoveryStatus: catalogResult.discoveryStatus,
+      models: catalogResult.models,
     },
     200
   );

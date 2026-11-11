@@ -16,7 +16,7 @@ export class OpenAiModelProvider implements IModelProvider {
   }
 
   supportsModel(modelId: string): boolean {
-    return modelId.startsWith('gpt-') || modelId.startsWith('o1') || modelId.startsWith('o3');
+    return modelId.startsWith('gpt-') || modelId.startsWith('o1') || modelId.startsWith('o3') || modelId.startsWith('chatgpt-');
   }
 
   async execute(options: ModelExecutionOptions): Promise<ModelExecutionResult> {
@@ -33,6 +33,20 @@ export class OpenAiModelProvider implements IModelProvider {
     }
 
     const targetModel = options.modelId || 'gpt-4o';
+    const isReasoningModel = targetModel.startsWith('o1') || targetModel.startsWith('o3');
+
+    const requestPayload: Record<string, any> = {
+      model: targetModel,
+      messages: options.messages,
+    };
+
+    if (isReasoningModel) {
+      // OpenAI reasoning models require max_completion_tokens and reject custom temperature
+      requestPayload.max_completion_tokens = options.maxTokens || 2048;
+    } else {
+      requestPayload.max_tokens = options.maxTokens || 1024;
+      requestPayload.temperature = options.temperature ?? 0.7;
+    }
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
@@ -40,12 +54,7 @@ export class OpenAiModelProvider implements IModelProvider {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${this.apiKey}`,
       },
-      body: JSON.stringify({
-        model: targetModel,
-        messages: options.messages,
-        max_tokens: options.maxTokens || 1024,
-        temperature: options.temperature ?? 0.7,
-      }),
+      body: JSON.stringify(requestPayload),
       signal: options.signal,
     });
 

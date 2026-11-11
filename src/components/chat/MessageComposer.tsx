@@ -154,13 +154,13 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
         />
 
         {/* Bottom Control Bar */}
-        <div className="mt-2 flex items-center justify-between pt-1">
-          {/* Left Actions (Attachment & Web Search Toggle) */}
-          <div className="flex items-center gap-1.5">
+        <div className="mt-2 flex items-center justify-between pt-1 gap-1.5 sm:gap-2">
+          {/* Left Actions (Attachment & Web Search Toggle & Model Selector) */}
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-neutral-400 dark:hover:text-neutral-100 dark:hover:bg-neutral-800 rounded-full transition-colors duration-150 cursor-pointer"
+              className="w-11 h-11 min-w-[44px] min-h-[44px] shrink-0 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-neutral-400 dark:hover:text-neutral-100 dark:hover:bg-neutral-800 rounded-full transition-colors duration-150 cursor-pointer"
               title="Attach files or code"
             >
               <Paperclip className="w-4 h-4" />
@@ -171,7 +171,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
               <button
                 type="button"
                 onClick={onToggleWebSearch}
-                className={`min-h-[44px] px-3.5 flex items-center gap-1.5 rounded-full text-xs font-medium transition-colors duration-150 cursor-pointer ${
+                className={`min-h-[44px] px-2.5 sm:px-3.5 shrink-0 flex items-center gap-1.5 rounded-full text-xs font-medium transition-colors duration-150 cursor-pointer ${
                   isWebSearchActive
                     ? 'bg-indigo-600 text-white shadow-xs dark:bg-indigo-500'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-neutral-400 dark:hover:text-neutral-200 dark:hover:bg-neutral-800'
@@ -185,17 +185,19 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
 
             {/* Model & Provider Selector near chat input */}
             {currentModelId && onSelectModel && (
-              <ModelSelector
-                compact
-                currentModelId={currentModelId}
-                onSelectModel={onSelectModel}
-                onOpenConnectModal={onOpenConnectModal}
-              />
+              <div className="min-w-0 flex-shrink">
+                <ModelSelector
+                  compact
+                  currentModelId={currentModelId}
+                  onSelectModel={onSelectModel}
+                  onOpenConnectModal={onOpenConnectModal}
+                />
+              </div>
             )}
           </div>
 
           {/* Right Action: Send / Stop Circular Button */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {isStreaming ? (
               <button
                 type="button"
