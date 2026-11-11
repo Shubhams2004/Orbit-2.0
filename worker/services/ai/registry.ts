@@ -131,27 +131,44 @@ export class ModelProviderRegistry {
   }
 
   /**
-   * Factory method to construct and populate registry from Cloudflare Worker Env
+   * Factory method to construct and populate registry for a specific authenticated user,
+   * prioritizing user-provided BYOK credentials with fallback to server environment variables.
    */
-  static fromEnv(env: Env): ModelProviderRegistry {
+  static forUser(
+    env: Env,
+    userCredentials?: Map<string, { apiKey: string; preferredModel?: string }>
+  ): ModelProviderRegistry {
     const registry = new ModelProviderRegistry();
 
     // 1. Cloudflare Workers AI (Default)
     const cfProvider = new CloudflareWorkersAiProvider(env.AI);
     registry.registerProvider(cfProvider, true);
 
-    // 2. OpenAI Provider (optional)
-    const openAiProvider = new OpenAiModelProvider(env.OPENAI_API_KEY);
+    // 2. OpenAI Provider (User BYOK prioritized, then server env)
+    const userOpenAiKey = userCredentials?.get('openai')?.apiKey;
+    const openAiKey = userOpenAiKey || env.OPENAI_API_KEY;
+    const openAiProvider = new OpenAiModelProvider(openAiKey);
     registry.registerProvider(openAiProvider);
 
-    // 3. Gemini Provider (optional)
-    const geminiProvider = new GeminiModelProvider(env.GEMINI_API_KEY);
+    // 3. Gemini Provider (User BYOK prioritized, then server env)
+    const userGeminiKey = userCredentials?.get('gemini')?.apiKey;
+    const geminiKey = userGeminiKey || env.GEMINI_API_KEY;
+    const geminiProvider = new GeminiModelProvider(geminiKey);
     registry.registerProvider(geminiProvider);
 
-    // 4. Anthropic Provider (optional)
-    const anthropicProvider = new AnthropicModelProvider(env.ANTHROPIC_API_KEY);
+    // 4. Anthropic Provider (User BYOK prioritized, then server env)
+    const userAnthropicKey = userCredentials?.get('anthropic')?.apiKey;
+    const anthropicKey = userAnthropicKey || env.ANTHROPIC_API_KEY;
+    const anthropicProvider = new AnthropicModelProvider(anthropicKey);
     registry.registerProvider(anthropicProvider);
 
     return registry;
+  }
+
+  /**
+   * Factory method to construct and populate registry from Cloudflare Worker Env
+   */
+  static fromEnv(env: Env): ModelProviderRegistry {
+    return ModelProviderRegistry.forUser(env, new Map());
   }
 }

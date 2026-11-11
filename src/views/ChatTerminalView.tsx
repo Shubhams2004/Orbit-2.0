@@ -4,6 +4,7 @@ import { ChatSidebar } from '../components/chat/ChatSidebar';
 import { ModelSelector } from '../components/chat/ModelSelector';
 import { ChatMessageItem } from '../components/chat/ChatMessageItem';
 import { MessageComposer } from '../components/chat/MessageComposer';
+import { ByokConnectModal } from '../components/chat/ByokConnectModal';
 import { AiOrb } from '../components/common/AiOrb';
 import {
   Sparkles,
@@ -54,6 +55,14 @@ export const ChatTerminalView: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileHistoryOpen, setIsMobileHistoryOpen] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
+  const [isByokModalOpen, setIsByokModalOpen] = useState(false);
+  const [byokModalProvider, setByokModalProvider] = useState<'gemini' | 'openai' | 'anthropic'>('gemini');
+
+  const handleOpenByokModal = (provider?: 'gemini' | 'openai' | 'anthropic') => {
+    if (provider) setByokModalProvider(provider);
+    setIsByokModalOpen(true);
+  };
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -193,6 +202,7 @@ export const ChatTerminalView: React.FC = () => {
             <ModelSelector
               currentModelId={selectedModelId}
               onSelectModel={setSelectedModelId}
+              onOpenConnectModal={handleOpenByokModal}
             />
 
             <span className="text-slate-300 dark:text-neutral-700 hidden sm:inline">/</span>
@@ -348,9 +358,21 @@ export const ChatTerminalView: React.FC = () => {
             isStreaming={isChatStreaming}
             isWebSearchActive={isWebSearchActive}
             onToggleWebSearch={() => setWebSearchActive((prev) => !prev)}
+            currentModelId={selectedModelId}
+            onSelectModel={setSelectedModelId}
+            onOpenConnectModal={handleOpenByokModal}
           />
         </div>
       </div>
+
+      {/* In-Chat Compact BYOK Connection Modal */}
+      <ByokConnectModal
+        isOpen={isByokModalOpen}
+        onClose={() => setIsByokModalOpen(false)}
+        initialProvider={byokModalProvider}
+        currentModelId={selectedModelId}
+        onSelectModel={setSelectedModelId}
+      />
     </div>
   );
 };

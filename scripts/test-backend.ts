@@ -19,6 +19,8 @@ import { OpenAiModelProvider } from '../worker/services/ai/providers/openai';
 import { GeminiModelProvider } from '../worker/services/ai/providers/gemini';
 import { AnthropicModelProvider } from '../worker/services/ai/providers/anthropic';
 import { ModelProviderError } from '../worker/services/ai/types';
+import { encryptApiKey, decryptApiKey, generateKeyHint } from '../worker/utils/crypto';
+import { getUserCredentials, saveUserCredential, deleteUserCredential, listUserProviders } from '../worker/services/ai/credentials';
 
 async function signRs256Jwt(
   header: Record<string, unknown>,
@@ -81,11 +83,13 @@ async function runTests() {
   const d1 = createTestD1(sqlite);
 
   // 1. Run migrations
-  console.log('1. Applying D1 Migrations: 0001_initial_schema.sql & 0002_seed_demo_data.sql...');
+  console.log('1. Applying D1 Migrations: 0001, 0002, and 0003_user_ai_credentials.sql...');
   const migration1 = fs.readFileSync(path.resolve(process.cwd(), 'migrations/0001_initial_schema.sql'), 'utf-8');
   const migration2 = fs.readFileSync(path.resolve(process.cwd(), 'migrations/0002_seed_demo_data.sql'), 'utf-8');
+  const migration3 = fs.readFileSync(path.resolve(process.cwd(), 'migrations/0003_user_ai_credentials.sql'), 'utf-8');
   sqlite.exec(migration1);
   sqlite.exec(migration2);
+  sqlite.exec(migration3);
   console.log('   ✅ Migrations applied successfully.\n');
 
   const env: Env = {
@@ -1993,6 +1997,269 @@ async function runTests() {
   assert(modelsData.providers.some((p: any) => p.id === 'openai' && p.isConfigured), 'OpenAI is recognized as configured when key present');
   assert(Array.isArray(modelsData.models), 'Returns models catalog');
   assert(modelsData.models.some((m: any) => m.id === 'orbit-agent-v2' && m.isDefault), 'Catalog contains default orbit-agent-v2');
+
+  // =========================================================================
+  // Section 15: Orbit 2.0 Direct Bring Your Own API Key (BYOK) Access
+  // =========================================================================
+  console.log('\n--- Section 15: Orbit 2.0 Direct Bring Your Own API Key (BYOK) Access ---');
+
+  // Test 15.1: AES-GCM 256-bit Cryptographic Encryption & User Scope Isolation
+  const sampleRawKey = 'AIzaSyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6';
+  const aliceUserId = 'user_alice_123';
+  const bobUserId = 'user_bob_456';
+  const byokTestSecret = 'test-master-encryption-secret-2026';
+
+  const encryptedForAlice = await encryptApiKey(sampleRawKey, aliceUserId, byokTestSecret);
+  assert(typeof encryptedForAlice === 'string' && encryptedForAlice.includes('.'), 'Encrypted payload is serialized IV.ciphertext');
+  assert(!encryptedForAlice.includes(sampleRawKey), 'Encrypted payload does not contain raw API key');
+
+  const decryptedAlice = await decryptApiKey(encryptedForAlice, aliceUserId, byokTestSecret);
+  assert(decryptedAlice === sampleRawKey, 'Decrypted key matches original plaintext for Alice');
+
+  let bobDecryptionFailed = false;
+  try {
+    await decryptApiKey(encryptedForAlice, bobUserId, byokTestSecret);
+  } catch {
+    bobDecryptionFailed = true;
+  }
+  assert(bobDecryptionFailed, 'Decryption fails when attempted by Bob (strict cryptographic isolation)');
+
+  // Key hint generation tests
+  const hintGemini = generateKeyHint(sampleRawKey);
+  assert(hintGemini === 'AIza...O5P6', `Gemini key hint is masked: ${hintGemini}`);
+  assert(!hintGemini.includes(sampleRawKey.slice(5, 20)), 'Key hint does not leak sensitive middle characters');
+
+  const hintOpenAi = generateKeyHint('sk-proj-1234567890abcdefghijklmnopqr');
+  assert(hintOpenAi.startsWith('sk-proj-...'), 'OpenAI hint preserves standard prefix');
+
+  const hintAnthropic = generateKeyHint('sk-ant-1234567890abcdefghijklmnopqr');
+  assert(hintAnthropic.startsWith('sk-ant-...'), 'Anthropic hint preserves standard prefix');
+
+  // Test 15.2: GET /api/v1/ai/providers returns supported providers
+  const providersRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/providers', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+      },
+    }),
+    aiProdEnv
+  );
+  const providersJson: any = await providersRes.json();
+  const providersData = providersJson.data || providersJson;
+  assert(providersRes.status === 200, 'GET /api/v1/ai/providers returns 200 OK');
+  assert(Array.isArray(providersData.providers), 'Returns providers list');
+  const cloudflareProv = providersData.providers.find((p: any) => p.id === 'cloudflare');
+  assert(cloudflareProv && cloudflareProv.isDefault && cloudflareProv.isConfigured, 'Cloudflare Workers AI is default and ready');
+  const geminiProv = providersData.providers.find((p: any) => p.id === 'gemini');
+  assert(geminiProv && geminiProv.byokSupported && !geminiProv.isConfigured, 'Gemini is unconfigured initially for Alice');
+
+  // Test 15.3: POST /api/v1/ai/providers/connect connects BYOK key
+  const connectGeminiRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/providers/connect', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider: 'gemini',
+        apiKey: sampleRawKey,
+        preferredModel: 'gemini-2.5-flash',
+      }),
+    }),
+    aiProdEnv
+  );
+  const connectGeminiJson: any = await connectGeminiRes.json();
+  const connectData = connectGeminiJson.data || connectGeminiJson;
+  assert(connectGeminiRes.status === 200, 'POST /api/v1/ai/providers/connect returns 200 OK');
+  assert(connectData.success === true, 'Connect result success is true');
+  assert(connectData.provider === 'gemini', 'Connected provider is gemini');
+  assert(connectData.keyHint === hintGemini, 'Returned keyHint matches safe mask');
+  assert(!JSON.stringify(connectGeminiJson).includes(sampleRawKey), 'Never leaks raw API key in response');
+
+  // Test 15.4: User credential persistence and Isolation between Alice and Bob
+  const aliceProvidersRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/providers', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+      },
+    }),
+    aiProdEnv
+  );
+  const aliceProvJson: any = await aliceProvidersRes.json();
+  const aliceProvData = aliceProvJson.data || aliceProvJson;
+  const aliceGemini = aliceProvData.providers.find((p: any) => p.id === 'gemini');
+  assert(aliceGemini && aliceGemini.isConfigured === true, 'Gemini is now marked configured for Alice');
+  assert(aliceGemini.keyHint === hintGemini, 'Alice receives her own keyHint');
+
+  // Check Bob (different authenticated user)
+  const bobByokToken = await createFbToken({
+    sub: bobUserId,
+    name: 'Bob Tester',
+    email: 'bob@example.com',
+  });
+
+  const bobProvidersRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/providers', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${bobByokToken}`,
+      },
+    }),
+    aiProdEnv
+  );
+  const bobProvJson: any = await bobProvidersRes.json();
+  const bobProvData = bobProvJson.data || bobProvJson;
+  const bobGemini = bobProvData.providers.find((p: any) => p.id === 'gemini');
+  assert(bobGemini && bobGemini.isConfigured === false, 'Gemini is unconfigured for Bob (strict user isolation)');
+  assert(!bobGemini.keyHint, 'Bob cannot see Alice keyHint');
+
+  // Test 15.5: Dynamic Model Catalog reflecting user BYOK status
+  const aliceModelsRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/models', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+      },
+    }),
+    aiProdEnv
+  );
+  const aliceModelsJson: any = await aliceModelsRes.json();
+  const aliceModelsData = aliceModelsJson.data || aliceModelsJson;
+  const aliceGeminiModel = aliceModelsData.models.find((m: any) => m.id === 'gemini-2.5-flash');
+  assert(aliceGeminiModel && aliceGeminiModel.isConfigured === true, 'gemini-2.5-flash is configured for Alice');
+
+  const bobModelsRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/models', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${bobByokToken}`,
+      },
+    }),
+    aiProdEnv
+  );
+  const bobModelsJson: any = await bobModelsRes.json();
+  const bobModelsData = bobModelsJson.data || bobModelsJson;
+  const bobGeminiModel = bobModelsData.models.find((m: any) => m.id === 'gemini-2.5-flash');
+  assert(bobGeminiModel && bobGeminiModel.isConfigured === false, 'gemini-2.5-flash is NOT configured for Bob');
+
+  // Test 15.6: Chat inference using Alice's decrypted BYOK key
+  let capturedGeminiApiKey = '';
+  globalThis.fetch = async (input: any, init?: any): Promise<Response> => {
+    const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input?.url || '';
+    if (urlStr.includes('generativelanguage.googleapis.com')) {
+      const parsedUrl = new URL(urlStr);
+      capturedGeminiApiKey = parsedUrl.searchParams.get('key') || '';
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: { parts: [{ text: 'Response via Alice BYOK Gemini key!' }] },
+              finishReason: 'STOP',
+            },
+          ],
+          usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 6, totalTokenCount: 16 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const aliceChatRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${validFbToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'Hello from Alice with BYOK',
+          model: 'gemini-2.5-flash',
+        }),
+      }),
+      aiProdEnv
+    );
+    const aliceChatJson: any = await aliceChatRes.json();
+    const aliceChatData = aliceChatJson.data || aliceChatJson;
+    assert(aliceChatRes.status === 200, 'Alice chat with BYOK key returns 200 OK');
+    assert(aliceChatData.provider === 'gemini', 'Provider used is gemini');
+    assert(aliceChatData.response === 'Response via Alice BYOK Gemini key!', 'Received BYOK response text');
+    assert(capturedGeminiApiKey === sampleRawKey, 'Worker accurately decrypted and supplied Alice BYOK key');
+
+    // Bob calling without key and with allowFallback: false returns 503
+    const bobChatRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${bobByokToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'Bob trying Gemini without BYOK',
+          model: 'gemini-2.5-flash',
+          allowFallback: false,
+        }),
+      }),
+      aiProdEnv
+    );
+    assert(bobChatRes.status === 503, 'Bob without BYOK key receives 503 when fallback disallowed');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  // Test 15.7: DELETE /api/v1/ai/providers/:provider disconnects key
+  const disconnectRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/providers/gemini', {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+      },
+    }),
+    aiProdEnv
+  );
+  const disconnectJson: any = await disconnectRes.json();
+  const disconnectData = disconnectJson.data || disconnectJson;
+  assert(disconnectRes.status === 200, 'DELETE /api/v1/ai/providers/gemini returns 200 OK');
+  assert(disconnectData.disconnected === true, 'Provider was marked disconnected');
+
+  // Verify Gemini is now unconfigured for Alice
+  const postDisconnectProvRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/providers', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+      },
+    }),
+    aiProdEnv
+  );
+  const postDisconnectJson: any = await postDisconnectProvRes.json();
+  const postData = postDisconnectJson.data || postDisconnectJson;
+  const postGemini = postData.providers.find((p: any) => p.id === 'gemini');
+  assert(postGemini && postGemini.isConfigured === false, 'Gemini is unconfigured after disconnection');
+
+  // Test 15.8: Built-in Cloudflare Workers AI remains operational
+  const defaultChatRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${validFbToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: 'Test built-in model after disconnect',
+        model: 'orbit-agent-v2',
+      }),
+    }),
+    aiProdEnv
+  );
+  assert(defaultChatRes.status === 200, 'Default built-in model returns 200 after disconnect');
+  const defaultChatJson: any = await defaultChatRes.json();
+  const defaultChatData = defaultChatJson.data || defaultChatJson;
+  assert(defaultChatData.provider === 'cloudflare', 'Default execution provider is cloudflare');
 
   console.log(`\n========================================`);
   console.log(`All Tests Finished: ${passed} Passed, ${failed} Failed`);

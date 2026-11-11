@@ -11,6 +11,8 @@ import {
   Globe,
 } from 'lucide-react';
 
+import { ModelSelector } from './ModelSelector';
+
 interface MessageComposerProps {
   onSendMessage: (content: string, attachments: ChatAttachment[]) => void;
   onStopGeneration: () => void;
@@ -19,6 +21,9 @@ interface MessageComposerProps {
   placeholder?: string;
   isWebSearchActive?: boolean;
   onToggleWebSearch?: () => void;
+  currentModelId?: string;
+  onSelectModel?: (modelId: string) => void;
+  onOpenConnectModal?: (provider?: 'gemini' | 'openai' | 'anthropic') => void;
 }
 
 export const MessageComposer: React.FC<MessageComposerProps> = ({
@@ -29,6 +34,9 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   placeholder = 'Message Orbit...',
   isWebSearchActive = false,
   onToggleWebSearch,
+  currentModelId,
+  onSelectModel,
+  onOpenConnectModal,
 }) => {
   const [content, setContent] = useState('');
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
@@ -173,6 +181,16 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
                 <Globe className={`w-3.5 h-3.5 ${isWebSearchActive ? 'text-white' : 'text-slate-500 dark:text-neutral-400'}`} />
                 <span className="text-[12px] font-medium hidden sm:inline">Search</span>
               </button>
+            )}
+
+            {/* Model & Provider Selector near chat input */}
+            {currentModelId && onSelectModel && (
+              <ModelSelector
+                compact
+                currentModelId={currentModelId}
+                onSelectModel={onSelectModel}
+                onOpenConnectModal={onOpenConnectModal}
+              />
             )}
           </div>
 

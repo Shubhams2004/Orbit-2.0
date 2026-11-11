@@ -22,7 +22,13 @@ import {
   handleDeleteConversation,
   handleGetMessages,
 } from './routes/conversations';
-import { handleAiChat, handleGetAiModels } from './routes/ai';
+import {
+  handleAiChat,
+  handleGetAiModels,
+  handleGetAiProviders,
+  handleConnectAiProvider,
+  handleDisconnectAiProvider,
+} from './routes/ai';
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -145,6 +151,23 @@ export default {
       // GET /api/v1/ai/models
       if (segments[0] === 'ai' && segments[1] === 'models') {
         if (method === 'GET') return await handleGetAiModels(request, env, user);
+        return errorResponse('METHOD_NOT_ALLOWED', `Method ${method} not allowed on ${pathname}`, 405);
+      }
+
+      // --- AI BYOK Provider Endpoints ---
+      // GET /api/v1/ai/providers
+      // POST /api/v1/ai/providers/connect
+      // DELETE /api/v1/ai/providers/:provider
+      if (segments[0] === 'ai' && segments[1] === 'providers') {
+        const subRoute = segments[2];
+        if (!subRoute) {
+          if (method === 'GET') return await handleGetAiProviders(request, env, user);
+        } else if (subRoute === 'connect') {
+          if (method === 'POST') return await handleConnectAiProvider(request, env, user);
+        } else {
+          // segments[2] is the provider name (e.g. gemini, openai, anthropic)
+          if (method === 'DELETE') return await handleDisconnectAiProvider(request, env, user, subRoute);
+        }
         return errorResponse('METHOD_NOT_ALLOWED', `Method ${method} not allowed on ${pathname}`, 405);
       }
 

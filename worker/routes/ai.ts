@@ -7,6 +7,13 @@ import { SearchEvidenceSource } from '../services/search/types';
 import { ModelProviderRegistry } from '../services/ai/registry';
 import { ModelMessage, ModelProviderError } from '../services/ai/types';
 import { DEFAULT_CLOUDFLARE_MODEL } from '../services/ai/providers/cloudflare';
+import {
+  getUserCredentials,
+  saveUserCredential,
+  deleteUserCredential,
+  listUserProviders,
+  SUPPORTED_BYOK_PROVIDERS,
+} from '../services/ai/credentials';
 
 const WORKERS_AI_MODEL = DEFAULT_CLOUDFLARE_MODEL;
 const BASE_SYSTEM_PROMPT =
@@ -51,13 +58,14 @@ export async function handleAiChat(
   env: Env,
   user: AuthenticatedUser
 ): Promise<Response> {
-  // 1. Guard: Check AI Capability (Cloudflare Workers AI default or active external providers)
-  const modelRegistry = ModelProviderRegistry.fromEnv(env);
+  // 1. Guard: Check AI Capability (Cloudflare Workers AI default or active external BYOK / env providers)
+  const userCredentials = await getUserCredentials(env.DB, user.id, env);
+  const modelRegistry = ModelProviderRegistry.forUser(env, userCredentials);
   const activeProviders = modelRegistry.listProviders().filter((p) => p.isConfigured);
   if (activeProviders.length === 0) {
     return errorResponse(
       'AI_UNAVAILABLE',
-      'Cloudflare Workers AI binding "AI" is not configured or unavailable on this Worker.',
+      'No AI model providers are configured or available. Please configure Cloudflare Workers AI or connect a BYOK provider.',
       503
     );
   }
@@ -341,9 +349,21 @@ export async function handleAiChat(
 export async function handleGetAiModels(
   _request: Request,
   env: Env,
-  _user: AuthenticatedUser
+  user: AuthenticatedUser
 ): Promise<Response> {
-  const modelRegistry = ModelProviderRegistry.fromEnv(env);
+  const userCredentials = await getUserCredentials(env.DB, user.id, env);
+  const modelRegistry = ModelProviderRegistry.forUser(env, userCredentials);
+
+  const isGeminiConfigured = Boolean(
+    userCredentials.has('gemini') || (env.GEMINI_API_KEY && env.GEMINI_API_KEY.trim().length > 0)
+  );
+  const isOpenAiConfigured = Boolean(
+    userCredentials.has('openai') || (env.OPENAI_API_KEY && env.OPENAI_API_KEY.trim().length > 0)
+  );
+  const isAnthropicConfigured = Boolean(
+    userCredentials.has('anthropic') || (env.ANTHROPIC_API_KEY && env.ANTHROPIC_API_KEY.trim().length > 0)
+  );
+
   return jsonResponse(
     {
       providers: modelRegistry.listProviders(),
@@ -357,29 +377,147 @@ export async function handleGetAiModels(
           isConfigured: Boolean(env.AI),
         },
         {
-          id: 'gpt-4o',
-          name: 'GPT-4o',
-          provider: 'openai',
-          isDefault: false,
-          isConfigured: Boolean(env.OPENAI_API_KEY && env.OPENAI_API_KEY.trim().length > 0),
-        },
-        {
           id: 'gemini-2.5-flash',
           name: 'Gemini 2.5 Flash',
           provider: 'gemini',
           isDefault: false,
-          isConfigured: Boolean(env.GEMINI_API_KEY && env.GEMINI_API_KEY.trim().length > 0),
+          isConfigured: isGeminiConfigured,
+        },
+        {
+          id: 'gemini-2.5-pro',
+          name: 'Gemini 2.5 Pro',
+          provider: 'gemini',
+          isDefault: false,
+          isConfigured: isGeminiConfigured,
+        },
+        {
+          id: 'gpt-4o',
+          name: 'GPT-4o',
+          provider: 'openai',
+          isDefault: false,
+          isConfigured: isOpenAiConfigured,
+        },
+        {
+          id: 'o3-mini',
+          name: 'o3-mini',
+          provider: 'openai',
+          isDefault: false,
+          isConfigured: isOpenAiConfigured,
         },
         {
           id: 'claude-3-7-sonnet',
           name: 'Claude 3.7 Sonnet',
           provider: 'anthropic',
           isDefault: false,
-          isConfigured: Boolean(env.ANTHROPIC_API_KEY && env.ANTHROPIC_API_KEY.trim().length > 0),
+          isConfigured: isAnthropicConfigured,
         },
       ],
     },
     200
   );
 }
+
+/**
+ * GET /api/v1/ai/providers
+ * Returns list of AI providers, BYOK configuration status, and masked key hints for the authenticated user.
+ */
+export async function handleGetAiProviders(
+  _request: Request,
+  env: Env,
+  user: AuthenticatedUser
+): Promise<Response> {
+  const providers = await listUserProviders(env.DB, user.id, env);
+  return jsonResponse({ providers }, 200);
+}
+
+/**
+ * POST /api/v1/ai/providers/connect
+ * Connects or updates a BYOK credential for the authenticated user.
+ * Keys are encrypted at rest with AES-GCM and never returned in responses or logs.
+ */
+export async function handleConnectAiProvider(
+  request: Request,
+  env: Env,
+  user: AuthenticatedUser
+): Promise<Response> {
+  let body: any;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse('INVALID_JSON', 'Malformed JSON in request body.', 400);
+  }
+
+  if (!body || typeof body !== 'object') {
+    return errorResponse('VALIDATION_ERROR', 'Request body must be a JSON object.', 400);
+  }
+
+  const { provider, apiKey, preferredModel } = body;
+
+  if (!provider || typeof provider !== 'string') {
+    return errorResponse('VALIDATION_ERROR', 'Field "provider" is required.', 400);
+  }
+
+  if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+    return errorResponse('VALIDATION_ERROR', 'Field "apiKey" is required and cannot be empty.', 400);
+  }
+
+  try {
+    const result = await saveUserCredential(
+      env.DB,
+      user.id,
+      provider,
+      apiKey,
+      typeof preferredModel === 'string' ? preferredModel : undefined,
+      env
+    );
+
+    return jsonResponse(
+      {
+        success: true,
+        provider: result.provider,
+        keyHint: result.keyHint,
+        preferredModel: result.preferredModel,
+        message: `Successfully connected ${result.provider} with encrypted BYOK storage.`,
+      },
+      200
+    );
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to save provider credential.';
+    return errorResponse('CREDENTIAL_SAVE_FAILED', message, 400);
+  }
+}
+
+/**
+ * DELETE /api/v1/ai/providers/:provider
+ * Disconnects and removes a user's BYOK credential from encrypted storage.
+ */
+export async function handleDisconnectAiProvider(
+  _request: Request,
+  env: Env,
+  user: AuthenticatedUser,
+  provider: string
+): Promise<Response> {
+  if (!provider || !provider.trim()) {
+    return errorResponse('VALIDATION_ERROR', 'Provider parameter is required.', 400);
+  }
+
+  try {
+    const deleted = await deleteUserCredential(env.DB, user.id, provider);
+    return jsonResponse(
+      {
+        success: true,
+        provider,
+        disconnected: deleted,
+        message: deleted
+          ? `Disconnected ${provider} credentials.`
+          : `No stored credentials found for ${provider}.`,
+      },
+      200
+    );
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to delete provider credential.';
+    return errorResponse('CREDENTIAL_DELETE_FAILED', message, 500);
+  }
+}
+
 

@@ -167,15 +167,28 @@ export interface Conversation {
   messageCount?: number;
 }
 
+export interface ProviderConnection {
+  id: 'cloudflare' | 'gemini' | 'openai' | 'anthropic';
+  name: string;
+  isDefault: boolean;
+  byokSupported: boolean;
+  isConfigured: boolean;
+  keyHint?: string;
+  preferredModel?: string;
+  updatedAt?: string;
+}
+
 export interface ModelOption {
   id: string;
   name: string;
   provider: 'Anthropic' | 'OpenAI' | 'Google' | 'Orbit Core';
+  providerKey?: 'cloudflare' | 'gemini' | 'openai' | 'anthropic';
   badge: string;
   description: string;
   contextWindow: string;
   isAgentCapable: boolean;
   isDefault?: boolean;
+  isConfigured?: boolean;
 }
 
 export interface UserSettings {

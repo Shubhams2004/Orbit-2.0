@@ -17,6 +17,7 @@ export interface Env {
   OPENAI_API_KEY?: string;
   GEMINI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
+  BYOK_ENCRYPTION_KEY?: string;
   ASSETS?: Fetcher;
 }
 
