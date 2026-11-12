@@ -437,7 +437,45 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const [activeConversationId, setActiveConversationId] = useState<string>('');
 
-  const [selectedModelId, setSelectedModelId] = useState<string>('orbit-agent-v2');
+  const [selectedModelId, setSelectedModelIdState] = useState<string>(() => {
+    try {
+      const stored = localStorage.getItem('orbit_active_model_preference');
+      if (stored && stored.trim()) return stored.trim();
+    } catch {}
+    return 'orbit-agent-v2';
+  });
+
+  const setSelectedModelId = (newModelId: string) => {
+    if (!newModelId || !newModelId.trim()) return;
+    const cleanId = newModelId.trim();
+    setSelectedModelIdState(cleanId);
+
+    const userKey = firebaseUser?.uid || user?.id;
+    try {
+      localStorage.setItem('orbit_active_model_preference', cleanId);
+      if (userKey) {
+        localStorage.setItem(`orbit_model_pref_${userKey}`, cleanId);
+      }
+    } catch {}
+
+    // Save to userSettings
+    setSettings((prev) => {
+      const updated = { ...prev, defaultChatModel: cleanId };
+      settingsService.saveSettings(updated, userKey);
+      return updated;
+    });
+
+    // If an active conversation is open, update its model override
+    if (activeConversationId && !isDemoConversationId(activeConversationId)) {
+      setConversations((prev) =>
+        prev.map((c) => (c.id === activeConversationId ? { ...c, modelId: cleanId } : c))
+      );
+      conversationService.updateConversation(activeConversationId, { modelId: cleanId }).catch(() => {});
+    }
+
+    // Persist to backend user preferences
+    apiClient.put('/api/v1/ai/preferences', { defaultModel: cleanId }).catch(() => {});
+  };
 
   const [isWebSearchActive, setWebSearchActive] = useState<boolean>(false);
 
@@ -515,6 +553,30 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
             name: fbUser.displayName || fbUser.email?.split('@')[0] || prev.name,
             email: fbUser.email || prev.email,
           }));
+
+          // Restore user-isolated settings & AI model preference
+          const userSettings = settingsService.getSettings(fbUser.uid);
+          setSettings(userSettings);
+
+          const storedUserPref = localStorage.getItem(`orbit_model_pref_${fbUser.uid}`);
+          if (storedUserPref && storedUserPref.trim()) {
+            setSelectedModelIdState(storedUserPref.trim());
+            localStorage.setItem('orbit_active_model_preference', storedUserPref.trim());
+          } else if (userSettings.defaultChatModel && userSettings.defaultChatModel.trim()) {
+            setSelectedModelIdState(userSettings.defaultChatModel.trim());
+          } else {
+            // Restore from server user preferences
+            apiClient
+              .get<{ defaultModel?: string }>('/api/v1/ai/preferences')
+              .then((res) => {
+                if (res?.defaultModel && res.defaultModel.trim()) {
+                  setSelectedModelIdState(res.defaultModel.trim());
+                  localStorage.setItem(`orbit_model_pref_${fbUser.uid}`, res.defaultModel.trim());
+                  localStorage.setItem('orbit_active_model_preference', res.defaultModel.trim());
+                }
+              })
+              .catch(() => {});
+          }
         } catch {}
       } else {
         // Clear stale development or cached tokens when Firebase has no authenticated user
@@ -529,8 +591,10 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
         setConversations([]);
         setActiveConversationId('');
         setChatMessages([]);
+        setSelectedModelIdState('orbit-agent-v2');
         try {
           localStorage.removeItem('orbit_conversations_v2');
+          localStorage.removeItem('orbit_active_model_preference');
         } catch {}
       }
       refreshData();
@@ -552,9 +616,10 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
         setChatMessages(msgs);
       });
       const conv = conversations.find((c) => c.id === activeConversationId);
-      if (conv) {
-        setSelectedModelId(conv.modelId || 'orbit-agent-v2');
+      if (conv && conv.modelId && conv.modelId.trim() && conv.modelId !== 'orbit-agent-v2') {
+        setSelectedModelIdState(conv.modelId.trim());
       }
+      // Note: If conversation has no model override, preserve the user's active model preference
     }
   }, [activeConversationId, conversations]);
 
@@ -610,7 +675,8 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
   const updateSettings = (partial: Partial<UserSettings>) => {
     setSettings((prev) => {
       const updated = { ...prev, ...partial };
-      settingsService.saveSettings(updated);
+      const userKey = firebaseUser?.uid || user?.id;
+      settingsService.saveSettings(updated, userKey);
       return updated;
     });
   };
@@ -904,15 +970,17 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
     title?: string,
     modelId?: string
   ): Promise<Conversation> => {
+    const effectiveModel = modelId || selectedModelId;
     const newConv = await conversationService.createConversation({
       title: title || 'New Conversation',
-      modelId: modelId || selectedModelId,
+      modelId: effectiveModel,
     });
     setConversations((prev) => [
       newConv,
       ...prev.filter((c) => c.id !== newConv.id && !isDemoConversationId(c.id)),
     ]);
     setActiveConversationId(newConv.id);
+    setSelectedModelIdState(effectiveModel);
     setChatMessages([]);
     return newConv;
   };

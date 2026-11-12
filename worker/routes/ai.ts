@@ -7,6 +7,7 @@ import { SearchEvidenceSource } from '../services/search/types';
 import { ModelProviderRegistry } from '../services/ai/registry';
 import { ModelMessage, ModelProviderError } from '../services/ai/types';
 import { DEFAULT_CLOUDFLARE_MODEL } from '../services/ai/providers/cloudflare';
+import { ensureConversationsSchema } from './conversations';
 import {
   getUserCredentials,
   saveUserCredential,
@@ -104,15 +105,45 @@ export async function handleAiChat(
       ? body.conversationId.trim()
       : null;
 
-  const requestedModel =
+  await ensureConversationsSchema(env.DB);
+
+  let requestedModel =
     typeof body.model === 'string' && body.model.trim()
       ? body.model.trim()
       : typeof body.modelId === 'string' && body.modelId.trim()
       ? body.modelId.trim()
       : undefined;
 
+  // If client did not explicitly pass a model, attempt to recover from existing conversation or user preference
+  if (!requestedModel && conversationId) {
+    try {
+      const convRow = await env.DB.prepare(
+        'SELECT model_id FROM conversations WHERE id = ? AND user_id = ?'
+      )
+        .bind(conversationId, user.id)
+        .first<{ model_id?: string }>();
+      if (convRow?.model_id) {
+        requestedModel = convRow.model_id;
+      }
+    } catch {}
+  }
+
+  // If still not determined, check user's saved default model preference
+  if (!requestedModel) {
+    try {
+      const userRow = await env.DB.prepare(
+        'SELECT default_chat_model FROM users WHERE id = ?'
+      )
+        .bind(user.id)
+        .first<{ default_chat_model?: string }>();
+      if (userRow?.default_chat_model) {
+        requestedModel = userRow.default_chat_model;
+      }
+    } catch {}
+  }
+
   // Lifecycle check: detect deprecated/retired models and substitute with official active replacement
-  let targetModelId = requestedModel;
+  let targetModelId = requestedModel || WORKERS_AI_MODEL;
   let deprecationNotice: string | undefined = undefined;
   if (targetModelId && DEPRECATED_MODEL_MAP[targetModelId]) {
     deprecationNotice = DEPRECATED_MODEL_MAP[targetModelId].notice;
@@ -146,10 +177,10 @@ export async function handleAiChat(
   try {
     if (conversationId) {
       const existingConv = await env.DB.prepare(
-        'SELECT id, title FROM conversations WHERE id = ? AND user_id = ?'
+        'SELECT id, title, model_id FROM conversations WHERE id = ? AND user_id = ?'
       )
         .bind(conversationId, user.id)
-        .first();
+        .first<{ id: string; title: string; model_id?: string }>();
 
       if (!existingConv) {
         return errorResponse(
@@ -158,16 +189,25 @@ export async function handleAiChat(
           404
         );
       }
+
+      // Update model_id on existing conversation if explicitly requested
+      if (body.model || body.modelId) {
+        await env.DB.prepare(
+          'UPDATE conversations SET model_id = ?, updated_at = ? WHERE id = ? AND user_id = ?'
+        )
+          .bind(targetModelId, now, conversationId, user.id)
+          .run();
+      }
     } else {
       // Automatically generate conversation when not provided
       const newTitle = prompt.length > 50 ? `${prompt.slice(0, 47)}...` : prompt;
       conversationId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
       await env.DB.prepare(
-        `INSERT INTO conversations (id, user_id, title, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?)`
+        `INSERT INTO conversations (id, user_id, title, model_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
       )
-        .bind(conversationId, user.id, newTitle, now, now)
+        .bind(conversationId, user.id, newTitle, targetModelId, now, now)
         .run();
     }
   } catch (err: unknown) {
@@ -275,11 +315,25 @@ export async function handleAiChat(
   let fallbackUsed = false;
 
   try {
+    const isExplicitByokModel =
+      targetModelId !== WORKERS_AI_MODEL && targetModelId !== 'orbit-agent-v2';
+
+    // Fallback determination:
+    // 1. If body.allowFallback is boolean, explicitly respect client preference.
+    // 2. If the model is deprecated, permit fallback so user receives response with deprecationNotice.
+    // 3. Otherwise, default to false for BYOK models (prevent silent fallback) and true for default model.
+    const allowFallback =
+      typeof body.allowFallback === 'boolean'
+        ? body.allowFallback
+        : deprecationNotice
+        ? true
+        : !isExplicitByokModel;
+
     const execResult = await modelRegistry.execute({
       messages: aiMessages as ModelMessage[],
-      maxTokens: 1024,
+      maxTokens: 2048,
       modelId: targetModelId,
-      allowFallback: body.allowFallback !== false,
+      allowFallback,
     });
 
     assistantText = execResult.text;
@@ -290,13 +344,18 @@ export async function handleAiChat(
     if (err instanceof ModelProviderError) {
       return errorResponse(err.code, err.message, err.statusCode, {
         provider: err.provider,
+        model: targetModelId,
       });
     }
     const message = err instanceof Error ? err.message : 'Model execution error';
     return errorResponse(
       'AI_GENERATION_FAILED',
       `Failed to generate response from model: ${message}`,
-      502
+      502,
+      {
+        provider: executedProvider,
+        model: targetModelId,
+      }
     );
   }
 
@@ -532,5 +591,98 @@ export async function handleDisconnectAiProvider(
     return errorResponse('CREDENTIAL_DELETE_FAILED', message, 500);
   }
 }
+
+/**
+ * GET /api/v1/ai/preferences
+ * Returns the authenticated user's active AI model and provider preferences.
+ */
+export async function handleGetAiPreferences(
+  _request: Request,
+  env: Env,
+  user: AuthenticatedUser
+): Promise<Response> {
+  let defaultModel = WORKERS_AI_MODEL;
+  try {
+    await env.DB.prepare('ALTER TABLE users ADD COLUMN default_chat_model TEXT').run();
+  } catch {}
+
+  try {
+    const userRow = await env.DB.prepare(
+      'SELECT default_chat_model FROM users WHERE id = ?'
+    )
+      .bind(user.id)
+      .first<{ default_chat_model?: string }>();
+    if (userRow?.default_chat_model) {
+      defaultModel = userRow.default_chat_model;
+    }
+  } catch {}
+
+  const providerPreferences: Record<string, string> = {};
+  try {
+    const credRows = await env.DB.prepare(
+      'SELECT provider, preferred_model FROM user_ai_credentials WHERE user_id = ?'
+    )
+      .bind(user.id)
+      .all<{ provider: string; preferred_model: string | null }>();
+
+    for (const c of credRows.results || []) {
+      if (c.preferred_model) {
+        providerPreferences[c.provider] = c.preferred_model;
+      }
+    }
+  } catch {}
+
+  return jsonResponse({ defaultModel, providerPreferences }, 200);
+}
+
+/**
+ * PUT or POST /api/v1/ai/preferences
+ * Updates the authenticated user's active AI model preference.
+ */
+export async function handleUpdateAiPreferences(
+  request: Request,
+  env: Env,
+  user: AuthenticatedUser
+): Promise<Response> {
+  let body: any = {};
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse('INVALID_JSON', 'Malformed JSON in request body.', 400);
+  }
+
+  const defaultModel =
+    typeof body.defaultModel === 'string' && body.defaultModel.trim()
+      ? body.defaultModel.trim()
+      : typeof body.modelId === 'string' && body.modelId.trim()
+      ? body.modelId.trim()
+      : undefined;
+
+  if (!defaultModel) {
+    return errorResponse('VALIDATION_ERROR', 'Field "defaultModel" is required.', 400);
+  }
+
+  try {
+    await env.DB.prepare('ALTER TABLE users ADD COLUMN default_chat_model TEXT').run();
+  } catch {}
+
+  const now = new Date().toISOString();
+  try {
+    await env.DB.prepare(
+      `INSERT INTO users (id, display_name, email, default_chat_model, created_at, updated_at)
+       VALUES (?, 'Orbit User', null, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         default_chat_model = excluded.default_chat_model,
+         updated_at = excluded.updated_at`
+    )
+      .bind(user.id, defaultModel, now, now)
+      .run();
+  } catch (err: unknown) {
+    console.error('[AI Preferences] Failed to update user preference:', err);
+  }
+
+  return jsonResponse({ success: true, defaultModel }, 200);
+}
+
 
 

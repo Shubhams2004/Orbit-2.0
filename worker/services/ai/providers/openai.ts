@@ -35,16 +35,23 @@ export class OpenAiModelProvider implements IModelProvider {
     const targetModel = options.modelId || 'gpt-4o';
     const isReasoningModel = targetModel.startsWith('o1') || targetModel.startsWith('o3');
 
+    const formattedMessages = options.messages.map((m) => {
+      if (isReasoningModel && m.role === 'system') {
+        return { role: 'developer', content: m.content };
+      }
+      return m;
+    });
+
     const requestPayload: Record<string, any> = {
       model: targetModel,
-      messages: options.messages,
+      messages: formattedMessages,
     };
 
     if (isReasoningModel) {
       // OpenAI reasoning models require max_completion_tokens and reject custom temperature
       requestPayload.max_completion_tokens = options.maxTokens || 2048;
     } else {
-      requestPayload.max_tokens = options.maxTokens || 1024;
+      requestPayload.max_tokens = options.maxTokens || 2048;
       requestPayload.temperature = options.temperature ?? 0.7;
     }
 

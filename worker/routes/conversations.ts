@@ -5,6 +5,7 @@ interface ConversationRow {
   id: string;
   user_id: string;
   title: string;
+  model_id?: string;
   created_at: string;
   updated_at: string;
   message_count?: number;
@@ -19,11 +20,25 @@ interface MessageRow {
   created_at: string;
 }
 
+let conversationsSchemaEnsured = false;
+
+export async function ensureConversationsSchema(db: D1Database): Promise<void> {
+  if (conversationsSchemaEnsured) return;
+  try {
+    await db.prepare('ALTER TABLE conversations ADD COLUMN model_id TEXT').run();
+  } catch (err: unknown) {
+    // Column already exists or duplicate column error - safe to ignore
+  }
+  conversationsSchemaEnsured = true;
+}
+
 export async function handleGetConversations(
   _request: Request,
   env: Env,
   user: AuthenticatedUser
 ): Promise<Response> {
+  await ensureConversationsSchema(env.DB);
+
   const query = `
     SELECT 
       c.*,
@@ -40,6 +55,7 @@ export async function handleGetConversations(
     id: row.id,
     userId: row.user_id,
     title: row.title,
+    modelId: row.model_id || 'orbit-agent-v2',
     messageCount: row.message_count || 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -53,29 +69,40 @@ export async function handleCreateConversation(
   env: Env,
   user: AuthenticatedUser
 ): Promise<Response> {
+  await ensureConversationsSchema(env.DB);
+
   let body: any = {};
   try {
     body = await request.json();
   } catch {}
 
-  const title = (body.title && typeof body.title === 'string' && body.title.trim())
-    ? body.title.trim()
-    : 'New Conversation';
+  const title =
+    body.title && typeof body.title === 'string' && body.title.trim()
+      ? body.title.trim()
+      : 'New Conversation';
+
+  const modelId =
+    body.modelId && typeof body.modelId === 'string' && body.modelId.trim()
+      ? body.modelId.trim()
+      : body.model && typeof body.model === 'string' && body.model.trim()
+      ? body.model.trim()
+      : 'orbit-agent-v2';
 
   const id = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   const now = new Date().toISOString();
 
   await env.DB.prepare(
-    `INSERT INTO conversations (id, user_id, title, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?)`
+    `INSERT INTO conversations (id, user_id, title, model_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)`
   )
-    .bind(id, user.id, title, now, now)
+    .bind(id, user.id, title, modelId, now, now)
     .run();
 
   const newConv = {
     id,
     userId: user.id,
     title,
+    modelId,
     messageCount: 0,
     createdAt: now,
     updatedAt: now,
@@ -90,6 +117,8 @@ export async function handlePatchConversation(
   user: AuthenticatedUser,
   conversationId: string
 ): Promise<Response> {
+  await ensureConversationsSchema(env.DB);
+
   let body: any;
   try {
     body = await request.json();
@@ -97,27 +126,58 @@ export async function handlePatchConversation(
     return errorResponse('INVALID_JSON', 'Malformed JSON in request body.', 400);
   }
 
-  if (!body.title || typeof body.title !== 'string' || !body.title.trim()) {
-    return errorResponse('VALIDATION_ERROR', 'Field "title" cannot be empty.', 400);
+  const updates: string[] = [];
+  const bindings: any[] = [];
+
+  if (body.title && typeof body.title === 'string' && body.title.trim()) {
+    updates.push('title = ?');
+    bindings.push(body.title.trim());
+  }
+
+  if (body.modelId && typeof body.modelId === 'string' && body.modelId.trim()) {
+    updates.push('model_id = ?');
+    bindings.push(body.modelId.trim());
+  } else if (body.model && typeof body.model === 'string' && body.model.trim()) {
+    updates.push('model_id = ?');
+    bindings.push(body.model.trim());
+  }
+
+  if (updates.length === 0) {
+    return errorResponse('VALIDATION_ERROR', 'No valid fields provided to update (title or modelId).', 400);
   }
 
   const now = new Date().toISOString();
+  updates.push('updated_at = ?');
+  bindings.push(now);
+
+  bindings.push(conversationId, user.id);
+
   const result = await env.DB.prepare(
-    `UPDATE conversations SET title = ?, updated_at = ? WHERE id = ? AND user_id = ?`
+    `UPDATE conversations SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`
   )
-    .bind(body.title.trim(), now, conversationId, user.id)
+    .bind(...bindings)
     .run();
 
   if (!result.meta.changes) {
     return errorResponse('NOT_FOUND', `Conversation with id "${conversationId}" not found.`, 404);
   }
 
-  return jsonResponse({
-    id: conversationId,
-    userId: user.id,
-    title: body.title.trim(),
-    updatedAt: now,
-  }, 200);
+  const updatedConv = await env.DB.prepare(
+    'SELECT * FROM conversations WHERE id = ? AND user_id = ?'
+  )
+    .bind(conversationId, user.id)
+    .first<ConversationRow>();
+
+  return jsonResponse(
+    {
+      id: conversationId,
+      userId: user.id,
+      title: updatedConv?.title || body.title,
+      modelId: updatedConv?.model_id || body.modelId || 'orbit-agent-v2',
+      updatedAt: now,
+    },
+    200
+  );
 }
 
 export async function handleDeleteConversation(

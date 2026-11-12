@@ -294,6 +294,7 @@ export class MockChatService implements IChatService {
         prompt: content,
         conversationId: apiConversationId,
         model: modelId,
+        allowFallback: false,
         webSearch: options.webSearch,
       });
 
@@ -343,14 +344,16 @@ export class MockChatService implements IChatService {
         throw err;
       }
 
-      // In production, never fall back to simulated responses for any error
-      if (isProductionEnv()) {
-        const errorMsg = err instanceof Error ? err.message : 'AI service unavailable in production.';
+      const isByokModel = modelId !== 'orbit-agent-v2';
+
+      // Never fall back to simulated responses in production, or when using an explicitly selected BYOK model, or when the server returned an API error
+      if (isProductionEnv() || isByokModel || err instanceof ApiError) {
+        const errorMsg = err instanceof Error ? err.message : 'AI model request failed.';
         const assistantErrorMsg: ChatMessage = {
           id: assistantMsgId,
           conversationId: targetConvId,
           role: 'assistant',
-          content: `⚠️ AI Service Error: ${errorMsg}`,
+          content: `⚠️ Provider Error: ${errorMsg}`,
           timestamp: new Date().toISOString(),
           modelUsed: modelId,
           status: 'error',
@@ -364,7 +367,7 @@ export class MockChatService implements IChatService {
         throw err;
       }
 
-      // Local fallback in non-production development only when Workers AI binding is unavailable
+      // Local fallback in non-production development only when Workers AI binding is unavailable for the default model
       const synthesized = await this.synthesizeResponse(
         content,
         modelId,

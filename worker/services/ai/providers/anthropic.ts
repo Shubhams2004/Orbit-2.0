@@ -44,17 +44,42 @@ export class AnthropicModelProvider implements IModelProvider {
     const systemMessages = options.messages.filter((m) => m.role === 'system');
     const conversationMessages = options.messages.filter((m) => m.role !== 'system');
 
-    const systemPrompt = systemMessages.map((m) => m.content).join('\n\n');
+    const systemPrompt = systemMessages
+      .map((m) => m.content.trim())
+      .filter(Boolean)
+      .join('\n\n');
 
-    const messages = conversationMessages.map((msg) => ({
-      role: msg.role === 'assistant' ? 'assistant' : 'user',
-      content: msg.content,
-    }));
+    // Anthropic API strictly requires alternating turns: user, assistant, user, assistant...
+    interface AnthropicMessage {
+      role: 'user' | 'assistant';
+      content: string;
+    }
+    const formattedMessages: AnthropicMessage[] = [];
+
+    for (const msg of conversationMessages) {
+      const text = (msg.content || '').trim();
+      if (!text) continue;
+      const role: 'user' | 'assistant' = msg.role === 'assistant' ? 'assistant' : 'user';
+      const last = formattedMessages[formattedMessages.length - 1];
+
+      if (last && last.role === role) {
+        last.content += `\n\n${text}`;
+      } else {
+        formattedMessages.push({ role, content: text });
+      }
+    }
+
+    if (formattedMessages.length > 0 && formattedMessages[0].role !== 'user') {
+      formattedMessages.unshift({ role: 'user', content: 'Hello' });
+    }
+    if (formattedMessages.length === 0) {
+      formattedMessages.push({ role: 'user', content: 'Hello' });
+    }
 
     const body: Record<string, any> = {
       model: targetModel,
-      messages,
-      max_tokens: options.maxTokens || 1024,
+      messages: formattedMessages,
+      max_tokens: options.maxTokens || 2048,
       temperature: options.temperature ?? 0.7,
     };
 

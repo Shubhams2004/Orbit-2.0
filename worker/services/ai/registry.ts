@@ -69,13 +69,28 @@ export class ModelProviderRegistry {
    */
   async execute(options: RegistryExecutionOptions): Promise<ModelExecutionResult> {
     const requestedModel = options.modelId || 'orbit-agent-v2';
-    const allowFallback = options.allowFallback !== false; // Default true for system resilience
+    const isExplicitNonDefault =
+      requestedModel !== 'orbit-agent-v2' && requestedModel !== DEFAULT_CLOUDFLARE_MODEL;
+
+    // Fallback behavior:
+    // If options.allowFallback is boolean, respect it explicitly.
+    // Otherwise, default to false for explicit non-default models, and true for default models.
+    const allowFallback =
+      typeof options.allowFallback === 'boolean'
+        ? options.allowFallback
+        : !isExplicitNonDefault;
+
     const primaryProvider = this.resolveProvider(requestedModel);
     const defaultProvider = this.getDefaultProvider();
 
     // Check if primary provider is configured
     if (!primaryProvider.isConfigured()) {
-      if (allowFallback && defaultProvider && defaultProvider.id !== primaryProvider.id && defaultProvider.isConfigured()) {
+      if (
+        allowFallback &&
+        defaultProvider &&
+        defaultProvider.id !== primaryProvider.id &&
+        defaultProvider.isConfigured()
+      ) {
         const fallbackResult = await defaultProvider.execute({
           ...options,
           modelId: DEFAULT_CLOUDFLARE_MODEL,
@@ -88,7 +103,7 @@ export class ModelProviderRegistry {
       }
 
       throw new ModelProviderError(
-        `Model provider "${primaryProvider.name}" is not configured on this server.`,
+        `Model provider "${primaryProvider.name}" is not configured for your account. Please connect your API key in the model selector.`,
         {
           code: 'PROVIDER_NOT_CONFIGURED',
           provider: primaryProvider.id,

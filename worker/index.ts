@@ -29,6 +29,8 @@ import {
   handleGetAiProviders,
   handleConnectAiProvider,
   handleDisconnectAiProvider,
+  handleGetAiPreferences,
+  handleUpdateAiPreferences,
 } from './routes/ai';
 
 export default {
@@ -174,6 +176,16 @@ export default {
           // segments[2] is the provider name (e.g. gemini, openai, anthropic)
           if (method === 'DELETE') return await handleDisconnectAiProvider(request, env, user, subRoute);
         }
+        return errorResponse('METHOD_NOT_ALLOWED', `Method ${method} not allowed on ${pathname}`, 405);
+      }
+
+      // --- AI User Preferences Endpoints ---
+      // GET /api/v1/ai/preferences
+      // PUT /api/v1/ai/preferences
+      // POST /api/v1/ai/preferences
+      if (segments[0] === 'ai' && segments[1] === 'preferences') {
+        if (method === 'GET') return await handleGetAiPreferences(request, env, user);
+        if (method === 'PUT' || method === 'POST') return await handleUpdateAiPreferences(request, env, user);
         return errorResponse('METHOD_NOT_ALLOWED', `Method ${method} not allowed on ${pathname}`, 405);
       }
 

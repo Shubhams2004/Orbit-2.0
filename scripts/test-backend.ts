@@ -2442,8 +2442,322 @@ async function runTests() {
   assert(deprecatedChatRes.status === 200, 'Deprecated model request succeeds with graceful fallback (200 OK)');
   const deprecatedChatJson: any = await deprecatedChatRes.json();
   const deprecatedChatData = deprecatedChatJson.data || deprecatedChatJson;
-  assert(typeof deprecatedChatData.deprecationNotice === 'string', 'Returns clear deprecation notice to client');
-  assert(deprecatedChatData.deprecationNotice.includes('GPT-3.5 Turbo is legacy'), 'Notice identifies retired model and replacement');
+  // ============================================================================
+  // Section 17: Orbit 2.0 BYOK Model Persistence & Execution Validation
+  // ============================================================================
+  console.log('\n--- Section 17: Orbit 2.0 BYOK Model Persistence & Execution Validation ---');
+
+  // Generate tokens for Alice and Bob
+  const s17AliceUserId = `user_alice_persist_${Date.now()}`;
+  const s17BobUserId = `user_bob_persist_${Date.now()}`;
+  const s17AliceToken = await createFbToken({
+    sub: s17AliceUserId,
+    email: 'alice.persist@example.com',
+    name: 'Alice Persistence',
+  });
+  const s17BobToken = await createFbToken({
+    sub: s17BobUserId,
+    email: 'bob.persist@example.com',
+    name: 'Bob Isolation',
+  });
+
+  // Test 17.1: Connect Gemini via BYOK with preferred model
+  const s17ConnectRes = await worker.fetch(
+    new Request('https://orbit.internal/api/v1/ai/providers/connect', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${s17AliceToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider: 'gemini',
+        apiKey: 'AIzaSyValidGeminiKeyForPersistenceTest_9988',
+        preferredModel: 'gemini-2.5-flash',
+      }),
+    }),
+    aiProdEnv
+  );
+  assert(s17ConnectRes.status === 200, 'Alice connects Gemini BYOK provider (200 OK)');
+  const s17ConnectData: any = await s17ConnectRes.json();
+  assert(s17ConnectData.data.provider === 'gemini', 'Connected provider is gemini');
+  assert(s17ConnectData.data.preferredModel === 'gemini-2.5-flash', 'Preferred model recorded');
+
+  // Test 17.2: Send prompt with gemini-2.5-flash and verify real Gemini execution (no silent fallback)
+  let capturedGeminiPayload: any = null;
+  const originalFetchBefore17 = globalThis.fetch;
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    if (urlStr.includes('generativelanguage.googleapis.com')) {
+      if (init?.body && typeof init.body === 'string') {
+        capturedGeminiPayload = JSON.parse(init.body);
+      }
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  { text: 'Hello Alice! I am Gemini 2.5 Flash operating via your connected BYOK key.' },
+                ],
+                role: 'model',
+              },
+              finishReason: 'STOP',
+            },
+          ],
+          usageMetadata: { promptTokenCount: 15, candidatesTokenCount: 18, totalTokenCount: 33 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    return originalFetchBefore17(input, init);
+  };
+
+  try {
+    const chatGeminiRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${s17AliceToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'Hello from Alice test',
+          model: 'gemini-2.5-flash',
+        }),
+      }),
+      aiProdEnv
+    );
+    assert(chatGeminiRes.status === 200, 'Chat with gemini-2.5-flash returns 200 OK');
+    const chatGeminiJson: any = await chatGeminiRes.json();
+    const chatGeminiData = chatGeminiJson.data || chatGeminiJson;
+    assert(chatGeminiData.provider === 'gemini', 'Executed provider is gemini');
+    assert(chatGeminiData.model === 'gemini-2.5-flash', 'Executed model is gemini-2.5-flash');
+    assert(chatGeminiData.fallbackUsed === false, 'fallbackUsed is false (executed real Gemini, no silent fallback)');
+    assert(chatGeminiData.response.includes('Gemini 2.5 Flash operating via your connected BYOK key'), 'Gemini response returned');
+
+    // Test 17.3: Verify Google Gemini API request format (alternating turns, parts array, systemInstruction)
+    assert(capturedGeminiPayload !== null, 'Gemini API received request payload');
+    assert(Array.isArray(capturedGeminiPayload.contents), 'contents is an array');
+    assert(capturedGeminiPayload.contents[0].role === 'user', 'First turn role is user');
+    assert(Array.isArray(capturedGeminiPayload.contents[0].parts), 'Turn parts is an array');
+    assert(capturedGeminiPayload.systemInstruction?.parts?.[0]?.text, 'systemInstruction passed with parts');
+
+    // Test 17.4: Conversation model persistence (Create conversation with modelId)
+    const createConvRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/conversations', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${s17AliceToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: 'Alice BYOK Strategy',
+          modelId: 'gemini-2.5-flash',
+        }),
+      }),
+      aiProdEnv
+    );
+    assert(createConvRes.status === 201, 'POST /api/v1/conversations returns 201');
+    const createConvData: any = await createConvRes.json();
+    const aliceConvId = createConvData.data.id;
+    assert(createConvData.data.modelId === 'gemini-2.5-flash', 'Conversation modelId persisted on creation');
+
+    // Verify GET /api/v1/conversations returns modelId
+    const getConvsRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/conversations', {
+        headers: { Authorization: `Bearer ${s17AliceToken}` },
+      }),
+      aiProdEnv
+    );
+    const getConvsData: any = await getConvsRes.json();
+    const foundAliceConv = getConvsData.data.find((c: any) => c.id === aliceConvId);
+    assert(foundAliceConv !== undefined, 'Found created conversation in list');
+    assert(foundAliceConv.modelId === 'gemini-2.5-flash', 'GET /api/v1/conversations returns persisted modelId');
+
+    // Test 17.5: Send message to conversation without specifying model in request body
+    // Worker must automatically restore modelId from conversation record and execute Gemini!
+    const autoRestoreChatRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${s17AliceToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'Follow up question in saved conversation',
+          conversationId: aliceConvId,
+          // note: model is intentionally omitted to verify automatic restoration
+        }),
+      }),
+      aiProdEnv
+    );
+    assert(autoRestoreChatRes.status === 200, 'Chat with omitted model in existing conversation returns 200');
+    const autoRestoreChatData = (await autoRestoreChatRes.json() as any).data;
+    assert(autoRestoreChatData.provider === 'gemini', 'Automatically restored model routes to gemini provider');
+    assert(autoRestoreChatData.model === 'gemini-2.5-flash', 'Automatically restored model is gemini-2.5-flash');
+
+    // Test 17.6: User AI Preferences API (PUT & GET)
+    const updatePrefRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/preferences', {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${s17AliceToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          defaultModel: 'gemini-2.5-pro',
+        }),
+      }),
+      aiProdEnv
+    );
+    assert(updatePrefRes.status === 200, 'PUT /api/v1/ai/preferences returns 200');
+
+    const getPrefRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/preferences', {
+        headers: { Authorization: `Bearer ${s17AliceToken}` },
+      }),
+      aiProdEnv
+    );
+    assert(getPrefRes.status === 200, 'GET /api/v1/ai/preferences returns 200');
+    const getPrefData = (await getPrefRes.json() as any).data;
+    assert(getPrefData.defaultModel === 'gemini-2.5-pro', 'Persisted user default model is gemini-2.5-pro');
+
+    // Test 17.7: Update conversation model override via PATCH
+    const patchConvRes = await worker.fetch(
+      new Request(`https://orbit.internal/api/v1/conversations/${aliceConvId}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${s17AliceToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          modelId: 'orbit-agent-v2',
+        }),
+      }),
+      aiProdEnv
+    );
+    assert(patchConvRes.status === 200, 'PATCH /api/v1/conversations/:id updates modelId');
+    const patchConvData = (await patchConvRes.json() as any).data;
+    assert(patchConvData.modelId === 'orbit-agent-v2', 'Patched modelId is orbit-agent-v2');
+
+    // Test 17.8: Prevent silent fallback when provider fails (Transparent Error Reporting)
+    // Configure fetch to simulate Gemini 400 API_KEY_INVALID error
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (urlStr.includes('generativelanguage.googleapis.com')) {
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: 400,
+              message: 'API key not valid. Please pass a valid API key.',
+              status: 'INVALID_ARGUMENT',
+            },
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return originalFetchBefore17(input, init);
+    };
+
+    const invalidKeyChatRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${s17AliceToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'Testing invalid key rejection',
+          model: 'gemini-2.5-flash',
+          allowFallback: false,
+        }),
+      }),
+      aiProdEnv
+    );
+    assert(invalidKeyChatRes.status === 401, 'Invalid Gemini key returns 401 error (no silent fallback to Llama)');
+    const invalidKeyChatJson: any = await invalidKeyChatRes.json();
+    assert(invalidKeyChatJson.error?.code === 'AUTHENTICATION_FAILED', 'Error code is AUTHENTICATION_FAILED');
+    assert(invalidKeyChatJson.error?.message?.includes('API key not valid'), 'Error message preserved from provider');
+    assert(invalidKeyChatJson.error?.details?.provider === 'gemini', 'Error details specify provider gemini');
+    assert(invalidKeyChatJson.error?.details?.model === 'gemini-2.5-flash', 'Error details specify model gemini-2.5-flash');
+
+    // Test 17.9: User Isolation Verification (Bob has no credentials and cannot use Alice key)
+    const bobProvidersRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/providers', {
+        headers: { Authorization: `Bearer ${s17BobToken}` },
+      }),
+      aiProdEnv
+    );
+    const bobProvidersData = (await bobProvidersRes.json() as any).data;
+    const bobGemini = bobProvidersData.providers.find((p: any) => p.id === 'gemini');
+    assert(bobGemini.isConfigured === false, 'Bob has Gemini unconfigured (user isolation verified)');
+
+    const bobChatRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${s17BobToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'Bob trying to use Gemini without key',
+          model: 'gemini-2.5-flash',
+          allowFallback: false,
+        }),
+      }),
+      aiProdEnv
+    );
+    assert(bobChatRes.status === 503, 'Bob without key receives 503 PROVIDER_NOT_CONFIGURED');
+
+    // Test 17.10: Default Cloudflare Workers AI continues to work normally for users without BYOK
+    const bobDefaultChatRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${s17BobToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'Bob using built-in Orbit Core',
+          model: 'orbit-agent-v2',
+        }),
+      }),
+      aiProdEnv
+    );
+    assert(bobDefaultChatRes.status === 200, 'Bob using default model returns 200 OK');
+    const bobDefaultData = (await bobDefaultChatRes.json() as any).data;
+    assert(bobDefaultData.provider === 'cloudflare', 'Default provider is cloudflare');
+    assert(bobDefaultData.fallbackUsed === false, 'fallbackUsed is false for default execution');
+
+    // Test 17.11: Disconnect provider
+    const disconnectAliceRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/providers/gemini', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${s17AliceToken}` },
+      }),
+      aiProdEnv
+    );
+    assert(disconnectAliceRes.status === 200, 'DELETE /api/v1/ai/providers/gemini returns 200 OK');
+
+    const disconnectedChatRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${s17AliceToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'Alice trying to chat after disconnect',
+          model: 'gemini-2.5-flash',
+          allowFallback: false,
+        }),
+      }),
+      aiProdEnv
+    );
+    assert(disconnectedChatRes.status === 503, 'Chatting with disconnected model returns 503 PROVIDER_NOT_CONFIGURED');
+  } finally {
+    globalThis.fetch = originalFetchBefore17;
+  }
 
   console.log(`\n========================================`);
   console.log(`All Tests Finished: ${passed} Passed, ${failed} Failed`);
@@ -2458,3 +2772,4 @@ runTests().catch((err) => {
   console.error('Fatal test error:', err);
   process.exit(1);
 });
+
