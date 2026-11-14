@@ -157,7 +157,12 @@ interface WorkspaceContextType {
   createNewConversation: (title?: string, modelId?: string) => Promise<Conversation>;
   renameConversation: (id: string, newTitle: string) => Promise<void>;
   deleteConversation: (id: string) => Promise<void>;
-  sendChatMessage: (content: string, attachments?: ChatAttachment[], webSearch?: boolean) => Promise<void>;
+  sendChatMessage: (
+    content: string,
+    attachments?: ChatAttachment[],
+    webSearch?: boolean,
+    options?: { isRetry?: boolean; replaceErrorMsgId?: string }
+  ) => Promise<void>;
   stopChatGeneration: () => void;
   regenerateMessage: (messageId: string) => Promise<void>;
   approveChatAction: (actionId: string) => void;
@@ -482,6 +487,8 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatStreaming, setIsChatStreaming] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isSendingRef = useRef<boolean>(false);
+  const lastLoadedConvIdRef = useRef<string>('');
 
   // Load backend data from Cloudflare Worker API
   const refreshData = async () => {
@@ -609,18 +616,35 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
     );
   };
 
-  // Load chat messages when active conversation changes
+  // Load chat messages when active conversation changes (never clobber an active stream or error bubble)
   useEffect(() => {
-    if (activeConversationId) {
-      chatService.getMessages(activeConversationId).then((msgs) => {
-        setChatMessages(msgs);
-      });
-      const conv = conversations.find((c) => c.id === activeConversationId);
-      if (conv && conv.modelId && conv.modelId.trim() && conv.modelId !== 'orbit-agent-v2') {
-        setSelectedModelIdState(conv.modelId.trim());
-      }
-      // Note: If conversation has no model override, preserve the user's active model preference
+    if (!activeConversationId) {
+      lastLoadedConvIdRef.current = '';
+      return;
     }
+
+    const conv = conversations.find((c) => c.id === activeConversationId);
+    if (conv && conv.modelId && conv.modelId.trim() && conv.modelId !== 'orbit-agent-v2') {
+      setSelectedModelIdState(conv.modelId.trim());
+    }
+
+    if (isSendingRef.current || activeConversationId === lastLoadedConvIdRef.current) {
+      return;
+    }
+
+    let cancelled = false;
+    const loadingConvId = activeConversationId;
+    lastLoadedConvIdRef.current = loadingConvId;
+
+    chatService.getMessages(loadingConvId).then((msgs) => {
+      if (!cancelled && !isSendingRef.current) {
+        setChatMessages(msgs);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [activeConversationId, conversations]);
 
   // UI Dialog state
@@ -1019,23 +1043,26 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    isSendingRef.current = false;
     setIsChatStreaming(false);
   };
 
   const sendChatMessage = async (
     content: string,
     attachments: ChatAttachment[] = [],
-    webSearch?: boolean
+    webSearch?: boolean,
+    options?: { isRetry?: boolean; replaceErrorMsgId?: string }
   ) => {
     if (!content.trim() && attachments.length === 0) return;
-    if (isChatStreaming) return;
+    if (isChatStreaming || isSendingRef.current) return;
+
+    const isRetry = Boolean(options?.isRetry);
+    const replaceErrorMsgId = options?.replaceErrorMsgId;
 
     // Use explicit parameter if passed, otherwise use current toggle state
     const effectiveWebSearch = webSearch !== undefined ? webSearch : isWebSearchActive;
 
     // Require authentication before sending chat requests
-    // In production, an authenticated Firebase user is required.
-    // In development, require either an authenticated Firebase user or an active development token.
     const hasValidAuth = firebaseUser !== null || (!isProductionEnv() && Boolean(currentAuthToken?.trim()));
     if (!hasValidAuth) {
       openAuthModal('login');
@@ -1050,30 +1077,22 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     // Verify conversation exists in the user's conversation list
-    let targetConv = targetConvId ? conversations.find((c) => c.id === targetConvId) : undefined;
+    const targetConv = targetConvId ? conversations.find((c) => c.id === targetConvId) : undefined;
     if (!targetConv) {
       targetConvId = '';
     }
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
+    isSendingRef.current = true;
     setIsChatStreaming(true);
+    setApiError(null);
 
-    const tempUserMsgId = `msg_u_${Date.now()}`;
-    const tempAssistantMsgId = `msg_a_${Date.now()}`;
+    const nowTs = Date.now();
+    const tempUserMsgId = `msg_u_${nowTs}`;
+    const tempAssistantMsgId = `msg_a_${nowTs}`;
 
     try {
-      const tempUserMsg: ChatMessage = {
-        id: tempUserMsgId,
-        conversationId: targetConvId,
-        role: 'user',
-        content,
-        timestamp: new Date().toISOString(),
-        modelUsed: selectedModelId,
-        attachments,
-        status: 'complete',
-      };
-
       const tempAssistantMsg: ChatMessage = {
         id: tempAssistantMsgId,
         conversationId: targetConvId,
@@ -1084,7 +1103,27 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
         status: 'streaming',
       };
 
-      setChatMessages((prev) => [...prev, tempUserMsg, tempAssistantMsg]);
+      if (isRetry) {
+        // Preserve the existing user message and replace only the failed assistant message
+        setChatMessages((prev) => {
+          const withoutTarget = replaceErrorMsgId
+            ? prev.filter((m) => m.id !== replaceErrorMsgId)
+            : prev;
+          return [...withoutTarget, tempAssistantMsg];
+        });
+      } else {
+        const tempUserMsg: ChatMessage = {
+          id: tempUserMsgId,
+          conversationId: targetConvId,
+          role: 'user',
+          content,
+          timestamp: new Date().toISOString(),
+          modelUsed: selectedModelId,
+          attachments,
+          status: 'complete',
+        };
+        setChatMessages((prev) => [...prev, tempUserMsg, tempAssistantMsg]);
+      }
 
       const assistantResult = await chatService.sendMessage({
         conversationId: targetConvId,
@@ -1092,23 +1131,56 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
         modelId: selectedModelId,
         attachments,
         webSearch: effectiveWebSearch,
+        retry: isRetry,
         signal: abortController.signal,
         tasksContext: tasks,
         projectsContext: projects,
-        onChunk: (accumulated) => {
+        onMeta: (meta) => {
+          if (meta.conversationId) {
+            targetConvId = meta.conversationId;
+            lastLoadedConvIdRef.current = meta.conversationId;
+            if (meta.conversationId !== activeConversationId) {
+              setActiveConversationId(meta.conversationId);
+            }
+          }
           setChatMessages((prev) =>
             prev.map((m) =>
-              m.id === tempAssistantMsgId ? { ...m, content: accumulated } : m
+              m.id === tempAssistantMsgId
+                ? {
+                    ...m,
+                    conversationId: meta.conversationId || m.conversationId,
+                    modelUsed: meta.model || m.modelUsed,
+                    provider: meta.provider || m.provider,
+                    webSearch: meta.webSearch || m.webSearch,
+                  }
+                : m
+            )
+          );
+        },
+        onChunk: (accumulated, meta) => {
+          setChatMessages((prev) =>
+            prev.map((m) =>
+              m.id === tempAssistantMsgId
+                ? {
+                    ...m,
+                    content: accumulated,
+                    modelUsed: meta?.model || m.modelUsed,
+                    provider: meta?.provider || m.provider,
+                    webSearch: meta?.webSearch || m.webSearch,
+                  }
+                : m
             )
           );
         },
       });
 
-      // The final conversation ID could be the auto-created ID from the server
       const finalConvId = assistantResult?.conversationId || targetConvId;
 
-      if (finalConvId && finalConvId !== activeConversationId) {
-        setActiveConversationId(finalConvId);
+      if (finalConvId) {
+        lastLoadedConvIdRef.current = finalConvId;
+        if (finalConvId !== activeConversationId) {
+          setActiveConversationId(finalConvId);
+        }
       }
 
       // Re-fetch conversations from the authenticated server API to ensure sidebar has new conversation
@@ -1120,7 +1192,19 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
       } catch {}
 
-      if (finalConvId) {
+      if (assistantResult?.status === 'stopped') {
+        setChatMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempAssistantMsgId
+              ? {
+                  ...m,
+                  content: assistantResult.content,
+                  status: 'stopped',
+                }
+              : m
+          )
+        );
+      } else if (finalConvId) {
         const refreshed = await chatService.getMessages(finalConvId);
         if (refreshed.length > 0) {
           setChatMessages(refreshed);
@@ -1141,52 +1225,78 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
           : err instanceof Error
           ? err.message
           : 'Failed to communicate with AI chat service.';
+      const errDetails = (err instanceof ApiError ? err.details : {}) as Record<string, any> | undefined;
+      const partialText = typeof errDetails?.partialText === 'string' ? errDetails.partialText : '';
+      const errConvId = typeof errDetails?.conversationId === 'string' ? errDetails.conversationId : targetConvId;
+      const errProvider = typeof errDetails?.provider === 'string' ? errDetails.provider : undefined;
+      const errRetryable = errDetails?.retryable !== false;
+
+      if (errConvId) {
+        lastLoadedConvIdRef.current = errConvId;
+        if (errConvId !== activeConversationId) {
+          setActiveConversationId(errConvId);
+        }
+      }
 
       setApiError(errorMsg);
 
       // If unauthorized, forbidden, or token expired, open AuthModal for the user
       const isAuthIssue =
-        (err instanceof ApiError && (err.status === 401 || err.status === 403)) ||
-        errorMsg.toLowerCase().includes('token') ||
-        errorMsg.toLowerCase().includes('unauthorized') ||
+        (err instanceof ApiError && (err.status === 401 || err.status === 403) && err.code !== 'AUTHENTICATION_FAILED') ||
+        errorMsg.toLowerCase().includes('token expired') ||
         errorMsg.toLowerCase().includes('firebase');
 
       if (isAuthIssue) {
         openAuthModal('login');
       }
 
-      if (targetConvId) {
-        try {
-          const refreshed = await chatService.getMessages(targetConvId);
-          if (refreshed.length > 0) {
-            setChatMessages(refreshed);
-            return;
-          }
-        } catch {}
-      }
-
+      // Preserve the original user prompt and render a clean, retryable error card (plus any partial response)
       setChatMessages((prev) =>
         prev.map((m) =>
           m.id === tempAssistantMsgId
             ? {
                 ...m,
-                content: `⚠️ Error: ${errorMsg}`,
+                conversationId: errConvId || m.conversationId,
+                content: partialText || '',
+                provider: errProvider || m.provider,
                 status: 'error',
                 errorMessage: errorMsg,
+                retryable: errRetryable,
               }
             : m
         )
       );
     } finally {
+      isSendingRef.current = false;
       setIsChatStreaming(false);
       abortControllerRef.current = null;
     }
   };
 
-  const regenerateMessage = async (_messageId: string) => {
-    const lastUserMsg = [...chatMessages].reverse().find((m) => m.role === 'user');
-    if (lastUserMsg) {
-      await sendChatMessage(lastUserMsg.content, lastUserMsg.attachments);
+  const regenerateMessage = async (messageId: string) => {
+    if (isChatStreaming || isSendingRef.current) return;
+
+    const targetIndex = chatMessages.findIndex((m) => m.id === messageId);
+    let targetUserMsg: ChatMessage | undefined;
+
+    if (targetIndex > 0) {
+      for (let i = targetIndex - 1; i >= 0; i--) {
+        if (chatMessages[i].role === 'user') {
+          targetUserMsg = chatMessages[i];
+          break;
+        }
+      }
+    }
+
+    if (!targetUserMsg) {
+      targetUserMsg = [...chatMessages].reverse().find((m) => m.role === 'user');
+    }
+
+    if (targetUserMsg) {
+      await sendChatMessage(targetUserMsg.content, targetUserMsg.attachments || [], undefined, {
+        isRetry: true,
+        replaceErrorMsgId: messageId,
+      });
     }
   };
 

@@ -149,11 +149,14 @@ export interface ChatMessage {
   content: string;
   timestamp: string; // ISO string
   modelUsed?: string;
+  provider?: string;
+  fallbackUsed?: boolean;
   attachments?: ChatAttachment[];
   actions?: AgentAction[];
   webSearch?: WebSearchMetadata;
   status?: 'streaming' | 'complete' | 'error' | 'stopped';
   errorMessage?: string;
+  retryable?: boolean;
   isSimulated?: boolean;
 }
 

@@ -374,6 +374,7 @@ export const ChatTerminalView: React.FC = () => {
                 <ChatMessageItem
                   key={msg.id}
                   message={msg}
+                  isBusy={isChatStreaming}
                   onRegenerate={() => regenerateMessage(msg.id)}
                   onApproveAction={approveChatAction}
                   onRejectAction={rejectChatAction}

@@ -1,4 +1,10 @@
-import { IModelProvider, ModelExecutionOptions, ModelExecutionResult, ModelProviderError } from './types';
+import {
+  IModelProvider,
+  ModelExecutionOptions,
+  ModelExecutionResult,
+  ModelProviderError,
+  ModelStreamChunk,
+} from './types';
 import { CloudflareWorkersAiProvider, DEFAULT_CLOUDFLARE_MODEL } from './providers/cloudflare';
 import { OpenAiModelProvider } from './providers/openai';
 import { GeminiModelProvider } from './providers/gemini';
@@ -7,6 +13,13 @@ import type { Env } from '../../types';
 
 export interface RegistryExecutionOptions extends ModelExecutionOptions {
   allowFallback?: boolean;
+}
+
+export interface RegistryStreamResult {
+  stream: ReadableStream<ModelStreamChunk>;
+  provider: string;
+  modelId: string;
+  fallbackUsed: boolean;
 }
 
 export class ModelProviderRegistry {
@@ -64,21 +77,46 @@ export class ModelProviderRegistry {
     return defaultProvider;
   }
 
+  private resolveAllowFallback(options: RegistryExecutionOptions): boolean {
+    const requestedModel = options.modelId || 'orbit-agent-v2';
+    const isExplicitNonDefault =
+      requestedModel !== 'orbit-agent-v2' && requestedModel !== DEFAULT_CLOUDFLARE_MODEL;
+
+    return typeof options.allowFallback === 'boolean'
+      ? options.allowFallback
+      : !isExplicitNonDefault;
+  }
+
+  private wrapNonStreamingExecution(
+    provider: IModelProvider,
+    options: ModelExecutionOptions
+  ): ReadableStream<ModelStreamChunk> {
+    return new ReadableStream<ModelStreamChunk>({
+      async start(controller) {
+        try {
+          const result = await provider.execute(options);
+          if (result.text) {
+            controller.enqueue({ type: 'delta', text: result.text });
+          }
+          controller.enqueue({
+            type: 'done',
+            finishReason: result.finishReason,
+            usage: result.usage,
+          });
+          controller.close();
+        } catch (err) {
+          controller.error(err);
+        }
+      },
+    });
+  }
+
   /**
    * Executes inference through the resolved provider, with optional graceful fallback.
    */
   async execute(options: RegistryExecutionOptions): Promise<ModelExecutionResult> {
     const requestedModel = options.modelId || 'orbit-agent-v2';
-    const isExplicitNonDefault =
-      requestedModel !== 'orbit-agent-v2' && requestedModel !== DEFAULT_CLOUDFLARE_MODEL;
-
-    // Fallback behavior:
-    // If options.allowFallback is boolean, respect it explicitly.
-    // Otherwise, default to false for explicit non-default models, and true for default models.
-    const allowFallback =
-      typeof options.allowFallback === 'boolean'
-        ? options.allowFallback
-        : !isExplicitNonDefault;
+    const allowFallback = this.resolveAllowFallback(options);
 
     const primaryProvider = this.resolveProvider(requestedModel);
     const defaultProvider = this.getDefaultProvider();
@@ -137,6 +175,109 @@ export class ModelProviderRegistry {
           };
         } catch {
           // If fallback also fails, rethrow the original primary error
+          throw primaryError;
+        }
+      }
+
+      throw primaryError;
+    }
+  }
+
+  /**
+   * Executes streaming inference through the resolved provider.
+   * Providers implementing executeStream() emit real incremental SSE chunks;
+   * non-streaming providers cleanly emit a single-chunk stream.
+   */
+  async executeStream(options: RegistryExecutionOptions): Promise<RegistryStreamResult> {
+    const requestedModel = options.modelId || 'orbit-agent-v2';
+    const allowFallback = this.resolveAllowFallback(options);
+
+    const primaryProvider = this.resolveProvider(requestedModel);
+    const defaultProvider = this.getDefaultProvider();
+
+    if (!primaryProvider.isConfigured()) {
+      if (
+        allowFallback &&
+        defaultProvider &&
+        defaultProvider.id !== primaryProvider.id &&
+        defaultProvider.isConfigured()
+      ) {
+        const fallbackModel = DEFAULT_CLOUDFLARE_MODEL;
+        const stream = defaultProvider.executeStream
+          ? await defaultProvider.executeStream({ ...options, modelId: fallbackModel })
+          : this.wrapNonStreamingExecution(defaultProvider, { ...options, modelId: fallbackModel });
+
+        return {
+          stream,
+          provider: defaultProvider.id,
+          modelId: fallbackModel,
+          fallbackUsed: true,
+        };
+      }
+
+      throw new ModelProviderError(
+        `Model provider "${primaryProvider.name}" is not configured for your account. Please connect your API key in the model selector.`,
+        {
+          code: 'PROVIDER_NOT_CONFIGURED',
+          provider: primaryProvider.id,
+          statusCode: 503,
+          isRetryable: false,
+        }
+      );
+    }
+
+    try {
+      if (primaryProvider.executeStream) {
+        const stream = await primaryProvider.executeStream(options);
+        return {
+          stream,
+          provider: primaryProvider.id,
+          modelId: requestedModel,
+          fallbackUsed: false,
+        };
+      }
+
+      const result = await primaryProvider.execute(options);
+      const stream = new ReadableStream<ModelStreamChunk>({
+        start(controller) {
+          if (result.text) {
+            controller.enqueue({ type: 'delta', text: result.text });
+          }
+          controller.enqueue({
+            type: 'done',
+            finishReason: result.finishReason,
+            usage: result.usage,
+          });
+          controller.close();
+        },
+      });
+
+      return {
+        stream,
+        provider: result.provider,
+        modelId: result.modelId,
+        fallbackUsed: Boolean(result.fallbackUsed),
+      };
+    } catch (primaryError: unknown) {
+      if (
+        allowFallback &&
+        defaultProvider &&
+        defaultProvider.id !== primaryProvider.id &&
+        defaultProvider.isConfigured()
+      ) {
+        try {
+          const fallbackModel = DEFAULT_CLOUDFLARE_MODEL;
+          const stream = defaultProvider.executeStream
+            ? await defaultProvider.executeStream({ ...options, modelId: fallbackModel })
+            : this.wrapNonStreamingExecution(defaultProvider, { ...options, modelId: fallbackModel });
+
+          return {
+            stream,
+            provider: defaultProvider.id,
+            modelId: fallbackModel,
+            fallbackUsed: true,
+          };
+        } catch {
           throw primaryError;
         }
       }

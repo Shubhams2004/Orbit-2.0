@@ -22,6 +22,7 @@ import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface ChatMessageItemProps {
   message: ChatMessage;
+  isBusy?: boolean;
   onRegenerate?: () => void;
   onApproveAction?: (actionId: string) => void;
   onRejectAction?: (actionId: string) => void;
@@ -29,6 +30,7 @@ interface ChatMessageItemProps {
 
 const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
   message,
+  isBusy = false,
   onRegenerate,
   onApproveAction,
   onRejectAction,
@@ -127,13 +129,22 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
               </span>
             </div>
 
-            {/* Markdown Content */}
-            <div className="text-slate-800 dark:text-neutral-200 leading-relaxed font-sans select-text">
-              <MarkdownRenderer
-                content={message.content}
-                isStreaming={isStreaming}
-              />
-            </div>
+            {/* Markdown Content or Initial Streaming Connection Indicator */}
+            {(message.content.trim().length > 0 || isStreaming) && (
+              <div className="text-slate-800 dark:text-neutral-200 leading-relaxed font-sans select-text">
+                {isStreaming && message.content.trim().length === 0 ? (
+                  <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-neutral-400 py-1">
+                    <span className="inline-block w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                    <span>Connecting to {message.modelUsed || 'model'}...</span>
+                  </div>
+                ) : (
+                  <MarkdownRenderer
+                    content={message.content}
+                    isStreaming={isStreaming}
+                  />
+                )}
+              </div>
+            )}
 
             {/* Grounded Web Evidence Sources (Inspiration PDF tactile glass cards) */}
             {message.webSearch && message.webSearch.sources && message.webSearch.sources.length > 0 && (
@@ -176,18 +187,29 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
 
             {/* Error / Stopped State */}
             {isError && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-300 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500 dark:text-rose-400" />
-                  <span>{message.errorMessage || 'Generation failed.'}</span>
+              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-700 dark:text-rose-200 flex flex-wrap items-center justify-between gap-3 text-xs sm:text-[13px]">
+                <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500 dark:text-rose-400 mt-0.5" />
+                  <div className="space-y-0.5 min-w-0">
+                    <div className="font-medium leading-relaxed">
+                      {message.errorMessage || 'Generation failed. Please try again.'}
+                    </div>
+                    {message.content.trim().length > 0 && (
+                      <div className="text-[11px] text-rose-600/80 dark:text-rose-300/80">
+                        Partial response preserved above.
+                      </div>
+                    )}
+                  </div>
                 </div>
                 {onRegenerate && (
                   <button
                     type="button"
+                    disabled={isBusy}
                     onClick={onRegenerate}
-                    className="min-h-[36px] px-3 py-1 text-xs text-white bg-rose-600 hover:bg-rose-500 rounded-lg transition-colors duration-150 font-medium cursor-pointer"
+                    className="min-h-[36px] px-3.5 py-1.5 text-xs text-white bg-rose-600 hover:bg-rose-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors duration-150 font-medium cursor-pointer flex items-center gap-1.5 shrink-0"
                   >
-                    Retry
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Retry</span>
                   </button>
                 )}
               </div>

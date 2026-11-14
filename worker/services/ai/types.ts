@@ -20,7 +20,20 @@ export interface ModelExecutionOptions {
   temperature?: number;
   modelId?: string;
   signal?: AbortSignal;
+  timeoutMs?: number;
 }
+
+export type ModelStreamChunk =
+  | { type: 'delta'; text: string }
+  | {
+      type: 'done';
+      finishReason?: string;
+      usage?: {
+        promptTokens?: number;
+        completionTokens?: number;
+        totalTokens?: number;
+      };
+    };
 
 export interface ModelExecutionResult {
   text: string;
@@ -41,6 +54,7 @@ export interface IModelProvider {
   isConfigured(): boolean;
   supportsModel(modelId: string): boolean;
   execute(options: ModelExecutionOptions): Promise<ModelExecutionResult>;
+  executeStream?(options: ModelExecutionOptions): Promise<ReadableStream<ModelStreamChunk>>;
 }
 
 export class ModelProviderError extends Error {
@@ -48,13 +62,27 @@ export class ModelProviderError extends Error {
   readonly provider: string;
   readonly statusCode: number;
   readonly isRetryable: boolean;
+  readonly upstreamStatus?: number;
+  readonly retryAfterMs?: number;
 
-  constructor(message: string, options: { code: string; provider: string; statusCode?: number; isRetryable?: boolean }) {
+  constructor(
+    message: string,
+    options: {
+      code: string;
+      provider: string;
+      statusCode?: number;
+      isRetryable?: boolean;
+      upstreamStatus?: number;
+      retryAfterMs?: number;
+    }
+  ) {
     super(message);
     this.name = 'ModelProviderError';
     this.code = options.code;
     this.provider = options.provider;
     this.statusCode = options.statusCode || 500;
     this.isRetryable = options.isRetryable || false;
+    this.upstreamStatus = options.upstreamStatus;
+    this.retryAfterMs = options.retryAfterMs;
   }
 }

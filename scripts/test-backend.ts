@@ -2759,6 +2759,387 @@ async function runTests() {
     globalThis.fetch = originalFetchBefore17;
   }
 
+  // -------------------------------------------------------------
+  // 18. Gemini HTTP 524 Gateway Timeout, SSE Streaming, Bounded Retry & Error UX
+  // -------------------------------------------------------------
+  console.log('\n18. Testing Gemini HTTP 524 Gateway Timeout, SSE Streaming, Bounded Retry & Error UX:');
+
+  const originalFetchBefore18 = globalThis.fetch;
+  try {
+    // Reconnect Alice's Gemini BYOK key for end-to-end Worker streaming & retry tests
+    const reconnectRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/providers/connect', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${s17AliceToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          provider: 'gemini',
+          apiKey: 'AIzaSyAliceSecretKey524TestXYZ999',
+          preferredModel: 'gemini-2.5-flash',
+        }),
+      }),
+      aiProdEnv
+    );
+    assert(reconnectRes.status === 200, 'Reconnected Alice Gemini BYOK key for Section 18 tests');
+
+    // Helper to collect SSE events from a Worker SSE Response
+    const readSseEvents = async (res: Response): Promise<Array<Record<string, any>>> => {
+      const text = await res.text();
+      const events: Array<Record<string, any>> = [];
+      for (const line of text.split(/\r?\n/)) {
+        if (line.startsWith('data:')) {
+          const raw = line.slice(5).trim();
+          if (raw) {
+            try {
+              events.push(JSON.parse(raw));
+            } catch {}
+          }
+        }
+      }
+      return events;
+    };
+
+    // Test 18.1: Gemini successful real SSE streaming response via Worker (:streamGenerateContent?alt=sse)
+    let seenStreamUrl = '';
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (urlStr.includes('generativelanguage.googleapis.com')) {
+        seenStreamUrl = urlStr;
+        const enc = new TextEncoder();
+        const geminiSse = new ReadableStream<Uint8Array>({
+          start(ctrl) {
+            ctrl.enqueue(
+              enc.encode(
+                `data: ${JSON.stringify({
+                  candidates: [{ content: { parts: [{ text: 'Hello ' }], role: 'model' } }],
+                })}\n\n`
+              )
+            );
+            ctrl.enqueue(
+              enc.encode(
+                `data: ${JSON.stringify({
+                  candidates: [{ content: { parts: [{ text: 'from Gemini stream!' }], role: 'model' }, finishReason: 'STOP' }],
+                  usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5, totalTokenCount: 15 },
+                })}\n\n`
+              )
+            );
+            ctrl.close();
+          },
+        });
+        return new Response(geminiSse, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream; charset=utf-8' },
+        });
+      }
+      return originalFetchBefore18(input, init);
+    };
+
+    const streamSuccessRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${s17AliceToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'Stream a greeting from Gemini',
+          model: 'gemini-2.5-flash',
+          stream: true,
+        }),
+      }),
+      aiProdEnv
+    );
+    assert(streamSuccessRes.status === 200, 'Gemini SSE streaming chat returns 200 OK');
+    assert(
+      streamSuccessRes.headers.get('content-type')?.includes('text/event-stream') === true,
+      'Response content-type is text/event-stream'
+    );
+    assert(
+      seenStreamUrl.includes(':streamGenerateContent?alt=sse'),
+      'Gemini provider calls :streamGenerateContent?alt=sse endpoint for streaming'
+    );
+    const streamEvents = await readSseEvents(streamSuccessRes);
+    const metaEvt = streamEvents.find((e) => e.type === 'meta');
+    const deltaEvts = streamEvents.filter((e) => e.type === 'delta');
+    const doneEvt = streamEvents.find((e) => e.type === 'done');
+    assert(Boolean(metaEvt?.conversationId), 'First SSE event emits meta with conversationId');
+    assert(deltaEvts.length === 2, 'Received incremental delta events');
+    assert(deltaEvts.map((d) => d.text).join('') === 'Hello from Gemini stream!', 'Streamed text matches full Gemini chunks');
+    assert(doneEvt?.provider === 'gemini' && doneEvt?.model === 'gemini-2.5-flash', 'Done SSE event includes provider & model');
+    const s18ConvId = metaEvt!.conversationId as string;
+
+    // Test 18.2: Gemini HTTP 524 transient timeout -> recovers on retry with exponential backoff
+    let attempts524Recover = 0;
+    globalThis.fetch = async (input: RequestInfo | URL): Promise<Response> => {
+      const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (urlStr.includes('generativelanguage.googleapis.com')) {
+        attempts524Recover++;
+        if (attempts524Recover < 3) {
+          return new Response('<html><title>524: A timeout occurred</title></html>', {
+            status: 524,
+            headers: { 'Content-Type': 'text/html' },
+          });
+        }
+        return new Response(
+          JSON.stringify({
+            candidates: [{ content: { parts: [{ text: 'Recovered after 524!' }], role: 'model' }, finishReason: 'STOP' }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return originalFetchBefore18(input);
+    };
+
+    const fastRetryGemini = new GeminiModelProvider('AIzaSyFastTestKey12345', undefined, {
+      maxRetries: 2,
+      retryBaseDelayMs: 15,
+      defaultTimeoutMs: 5000,
+    });
+    const recovered524Res = await fastRetryGemini.execute({
+      modelId: 'gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'Test 524 recovery' }],
+    });
+    assert(attempts524Recover === 3, 'Gemini retries HTTP 524 up to 2 times and succeeds on 3rd attempt');
+    assert(recovered524Res.text === 'Recovered after 524!', 'Recovered response text returned cleanly');
+
+    // Test 18.3: Gemini HTTP 524 persistent failure -> exhausts retries cleanly, never leaks key, no silent Llama fallback
+    let attempts524Exhaust = 0;
+    globalThis.fetch = async (input: RequestInfo | URL): Promise<Response> => {
+      const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (urlStr.includes('generativelanguage.googleapis.com')) {
+        attempts524Exhaust++;
+        return new Response('<html>524 Origin Time-out</html>', {
+          status: 524,
+          headers: { 'Content-Type': 'text/html' },
+        });
+      }
+      return originalFetchBefore18(input);
+    };
+
+    let caught524Err: any = null;
+    try {
+      await fastRetryGemini.execute({
+        modelId: 'gemini-2.5-pro',
+        messages: [{ role: 'user', content: 'Test persistent 524' }],
+      });
+    } catch (e) {
+      caught524Err = e;
+    }
+    assert(attempts524Exhaust === 3, 'Persistent HTTP 524 executes 1 initial + 2 retries (3 total attempts)');
+    assert(caught524Err instanceof ModelProviderError, 'Throws ModelProviderError on exhausted 524');
+    assert(caught524Err.code === 'GATEWAY_TIMEOUT', 'HTTP 524 maps to GATEWAY_TIMEOUT code');
+    assert(caught524Err.statusCode === 504 && caught524Err.upstreamStatus === 524, 'HTTP 524 maps to 504 with upstreamStatus 524');
+    assert(caught524Err.isRetryable === true, 'HTTP 524 error is marked retryable');
+    assert(!caught524Err.message.includes('<html>') && !caught524Err.message.includes('AIza'), 'HTTP 524 error strips raw HTML and never leaks API keys');
+
+    // Test 18.4: Gemini HTTP 429 rate limit -> bounded exponential backoff retry & recovery
+    let attempts429 = 0;
+    globalThis.fetch = async (input: RequestInfo | URL): Promise<Response> => {
+      const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (urlStr.includes('generativelanguage.googleapis.com')) {
+        attempts429++;
+        if (attempts429 === 1) {
+          return new Response(
+            JSON.stringify({ error: { code: 429, message: 'Resource exhausted', status: 'RESOURCE_EXHAUSTED' } }),
+            { status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': '0' } }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            candidates: [{ content: { parts: [{ text: 'Succeeded after 429 backoff' }], role: 'model' }, finishReason: 'STOP' }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return originalFetchBefore18(input);
+    };
+
+    const recovered429 = await fastRetryGemini.execute({
+      modelId: 'gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'Test 429 retry' }],
+    });
+    assert(attempts429 === 2, 'Gemini retries HTTP 429 with backoff');
+    assert(recovered429.text === 'Succeeded after 429 backoff', 'HTTP 429 retry recovery returns clean response');
+
+    // Test 18.5: Invalid API key (401/400) -> NO unnecessary retries (attempts === 1)
+    let attemptsInvalidKey = 0;
+    globalThis.fetch = async (): Promise<Response> => {
+      attemptsInvalidKey++;
+      return new Response(
+        JSON.stringify({ error: { code: 400, message: 'API key not valid. Please pass a valid API key.', status: 'INVALID_ARGUMENT' } }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    };
+    let caughtAuthErr: any = null;
+    try {
+      await fastRetryGemini.execute({
+        modelId: 'gemini-2.5-flash',
+        messages: [{ role: 'user', content: 'Bad key' }],
+      });
+    } catch (e) {
+      caughtAuthErr = e;
+    }
+    assert(attemptsInvalidKey === 1, 'Invalid API key does NOT retry (exactly 1 attempt)');
+    assert(caughtAuthErr?.code === 'AUTHENTICATION_FAILED' && caughtAuthErr?.statusCode === 401, 'Invalid API key maps to AUTHENTICATION_FAILED (401)');
+
+    // Test 18.6: Unsupported model (404) -> NO unnecessary retries (attempts === 1)
+    let attemptsUnsupported = 0;
+    globalThis.fetch = async (): Promise<Response> => {
+      attemptsUnsupported++;
+      return new Response(
+        JSON.stringify({ error: { code: 404, message: 'models/gemini-nonexistent is not found for API version v1beta', status: 'NOT_FOUND' } }),
+        { status: 404, headers: { 'Content-Type': 'application/json' } }
+      );
+    };
+    let caughtModelErr: any = null;
+    try {
+      await fastRetryGemini.execute({
+        modelId: 'gemini-nonexistent',
+        messages: [{ role: 'user', content: 'Unsupported model' }],
+      });
+    } catch (e) {
+      caughtModelErr = e;
+    }
+    assert(attemptsUnsupported === 1, 'Unsupported model (404) does NOT retry (exactly 1 attempt)');
+    assert(caughtModelErr?.code === 'MODEL_NOT_FOUND' && caughtModelErr?.statusCode === 404, 'Unsupported model maps to MODEL_NOT_FOUND (404)');
+
+    // Test 18.7: Interrupted streaming response -> preserves partial delta chunks and emits SSE error event
+    globalThis.fetch = async (input: RequestInfo | URL): Promise<Response> => {
+      const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (urlStr.includes('generativelanguage.googleapis.com')) {
+        const enc = new TextEncoder();
+        let pullCount = 0;
+        const droppingStream = new ReadableStream<Uint8Array>({
+          pull(ctrl) {
+            pullCount++;
+            if (pullCount === 1) {
+              ctrl.enqueue(
+                enc.encode(
+                  `data: ${JSON.stringify({
+                    candidates: [{ content: { parts: [{ text: 'Partial Gemini answer before drop' }], role: 'model' } }],
+                  })}\n\n`
+                )
+              );
+              return;
+            }
+            ctrl.error(new Error('Simulated upstream TCP reset mid-stream'));
+          },
+        });
+        return new Response(droppingStream, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+      }
+      return originalFetchBefore18(input);
+    };
+
+    const interruptedRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${s17AliceToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'Trigger mid-stream drop',
+          conversationId: s18ConvId,
+          model: 'gemini-2.5-flash',
+          stream: true,
+        }),
+      }),
+      aiProdEnv
+    );
+    assert(interruptedRes.status === 200, 'Interrupted SSE stream starts cleanly with 200 OK SSE headers');
+    const interruptedEvents = await readSseEvents(interruptedRes);
+    const interruptedDeltas = interruptedEvents.filter((e) => e.type === 'delta');
+    const interruptedErrEvt = interruptedEvents.find((e) => e.type === 'error');
+    assert(interruptedDeltas.length === 1 && interruptedDeltas[0].text === 'Partial Gemini answer before drop', 'Partial SSE chunks are streamed before interruption');
+    assert(interruptedErrEvt?.code === 'STREAM_INTERRUPTED', 'Emits STREAM_INTERRUPTED SSE error event');
+    assert(interruptedErrEvt?.partialText === 'Partial Gemini answer before drop', 'SSE error event preserves partialText');
+    assert(interruptedErrEvt?.retryable === true, 'Interrupted stream error is marked retryable');
+
+    // Test 18.8: Retry after failure (retry: true) does NOT duplicate user message in D1, and Llama/fallback switching still works
+    const msgsBeforeRetry = await d1
+      .prepare("SELECT * FROM messages WHERE conversation_id = ? AND role = 'user'")
+      .bind(s18ConvId)
+      .all();
+    const userMsgCountBefore = msgsBeforeRetry.results.filter(
+      (m: any) => m.content === 'Trigger mid-stream drop'
+    ).length;
+    assert(userMsgCountBefore === 1, 'Failed turn persisted exactly 1 user message in D1 before retry');
+
+    globalThis.fetch = async (input: RequestInfo | URL): Promise<Response> => {
+      const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (urlStr.includes('generativelanguage.googleapis.com')) {
+        return new Response(
+          JSON.stringify({
+            candidates: [{ content: { parts: [{ text: 'Retry completed cleanly!' }], role: 'model' }, finishReason: 'STOP' }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return originalFetchBefore18(input);
+    };
+
+    const retryTurnRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${s17AliceToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'Trigger mid-stream drop',
+          conversationId: s18ConvId,
+          model: 'gemini-2.5-flash',
+          retry: true,
+          stream: true,
+        }),
+      }),
+      aiProdEnv
+    );
+    const retryEvents = await readSseEvents(retryTurnRes);
+    const retryDone = retryEvents.find((e) => e.type === 'done');
+    assert(retryDone?.provider === 'gemini', 'Retry succeeded through Gemini provider');
+
+    const msgsAfterRetry = await d1
+      .prepare("SELECT * FROM messages WHERE conversation_id = ? AND role = 'user'")
+      .bind(s18ConvId)
+      .all();
+    const userMsgCountAfter = msgsAfterRetry.results.filter(
+      (m: any) => m.content === 'Trigger mid-stream drop'
+    ).length;
+    assert(userMsgCountAfter === 1, 'Retry with retry: true does NOT duplicate user message in D1');
+
+    // Test 18.9: Switching between Gemini and Llama works cleanly even after Gemini errors
+    const switchToLlamaRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${s17AliceToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'Switch back to Orbit Core Llama',
+          conversationId: s18ConvId,
+          model: 'orbit-agent-v2',
+          stream: true,
+        }),
+      }),
+      aiProdEnv
+    );
+    const llamaEvents = await readSseEvents(switchToLlamaRes);
+    const llamaDone = llamaEvents.find((e) => e.type === 'done');
+    assert(llamaDone?.provider === 'cloudflare' && llamaDone?.fallbackUsed === false, 'Switching from Gemini back to Llama executes Cloudflare Workers AI cleanly');
+
+    // Cleanup Alice credential after Section 18
+    await deleteUserCredential(d1, 'fb_usr_alice_101', 'gemini');
+  } finally {
+    globalThis.fetch = originalFetchBefore18;
+  }
+
   console.log(`\n========================================`);
   console.log(`All Tests Finished: ${passed} Passed, ${failed} Failed`);
   console.log(`========================================`);

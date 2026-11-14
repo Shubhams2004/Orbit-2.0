@@ -57,6 +57,18 @@ async function startServer() {
 
   // 3. API Router mounting the Cloudflare Worker fetch handler
   app.all('/api/*', async (req, res) => {
+    const reqAbortController = new AbortController();
+    let streamReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+
+    res.on('close', () => {
+      if (!res.writableEnded) {
+        reqAbortController.abort();
+        if (streamReader) {
+          streamReader.cancel().catch(() => {});
+        }
+      }
+    });
+
     try {
       const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
       const requestHost = req.get('host') || `127.0.0.1:${PORT}`;
@@ -76,6 +88,7 @@ async function startServer() {
       const init: RequestInit = {
         method: req.method,
         headers,
+        signal: reqAbortController.signal,
       };
 
       if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -92,16 +105,43 @@ async function startServer() {
         res.setHeader(key, val);
       });
 
+      const contentType = webResponse.headers.get('content-type') || '';
+      if (contentType.includes('text/event-stream') && webResponse.body) {
+        res.flushHeaders();
+        streamReader = webResponse.body.getReader();
+        try {
+          while (!res.writableEnded) {
+            const { done, value } = await streamReader.read();
+            if (done) break;
+            if (value && value.byteLength > 0) {
+              res.write(Buffer.from(value));
+            }
+          }
+        } finally {
+          if (!res.writableEnded) {
+            res.end();
+          }
+        }
+        return;
+      }
+
       const bodyBuffer = Buffer.from(await webResponse.arrayBuffer());
       res.send(bodyBuffer);
     } catch (err: unknown) {
+      if (reqAbortController.signal.aborted && res.writableEnded) {
+        return;
+      }
       console.error('[Server API Error]', err);
-      res.status(500).json({
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: err instanceof Error ? err.message : 'Internal Server Error',
-        },
-      });
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: {
+            code: 'INTERNAL_SERVER_ERROR',
+            message: err instanceof Error ? err.message : 'Internal Server Error',
+          },
+        });
+      } else if (!res.writableEnded) {
+        res.end();
+      }
     }
   });
 

@@ -20,7 +20,11 @@ export class ApiError extends Error {
 
 export interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
+  timeoutMs?: number;
 }
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
+const DEFAULT_STREAM_TIMEOUT_MS = 140_000;
 
 export const isProductionEnv = (): boolean => {
   return Boolean(
@@ -88,29 +92,7 @@ export class ApiClient {
     return this.authToken;
   }
 
-  async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-    const { params, headers = {}, ...customConfig } = options;
-
-    let url = `${this.baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-
-    if (params) {
-      const searchParams = new URLSearchParams();
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined) {
-          searchParams.append(key, String(value));
-        }
-      });
-      const queryString = searchParams.toString();
-      if (queryString) {
-        url += (url.includes('?') ? '&' : '?') + queryString;
-      }
-    }
-
-    const defaultHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    };
-
+  private async resolveAuthHeader(): Promise<string | null> {
     // Obtain a fresh Firebase ID token if an active session exists
     let effectiveToken = '';
     try {
@@ -146,12 +128,77 @@ export class ApiClient {
       } catch {}
     }
 
-    if (effectiveToken) {
-      defaultHeaders['Authorization'] = `Bearer ${effectiveToken}`;
+    return effectiveToken ? `Bearer ${effectiveToken}` : null;
+  }
+
+  private buildUrl(endpoint: string, params?: Record<string, string | number | boolean | undefined>): string {
+    let url = `${this.baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+
+    if (params) {
+      const searchParams = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) {
+          searchParams.append(key, String(value));
+        }
+      });
+      const queryString = searchParams.toString();
+      if (queryString) {
+        url += (url.includes('?') ? '&' : '?') + queryString;
+      }
     }
+
+    return url;
+  }
+
+  private createTimeoutSignal(parentSignal: AbortSignal | undefined, timeoutMs: number) {
+    const controller = new AbortController();
+    let timedOut = false;
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+
+    const onParentAbort = () => controller.abort();
+    if (parentSignal) {
+      if (parentSignal.aborted) {
+        controller.abort();
+      } else {
+        parentSignal.addEventListener('abort', onParentAbort, { once: true });
+      }
+    }
+
+    return {
+      signal: controller.signal,
+      didTimeout: () => timedOut,
+      cleanup: () => {
+        clearTimeout(timer);
+        if (parentSignal) {
+          parentSignal.removeEventListener('abort', onParentAbort);
+        }
+      },
+    };
+  }
+
+  async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+    const { params, headers = {}, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, signal: parentSignal, ...customConfig } = options;
+    const url = this.buildUrl(endpoint, params);
+
+    const defaultHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+
+    const authHeader = await this.resolveAuthHeader();
+    if (authHeader) {
+      defaultHeaders['Authorization'] = authHeader;
+    }
+
+    const timeoutCtrl = this.createTimeoutSignal(parentSignal ?? undefined, timeoutMs);
 
     const config: RequestInit = {
       ...customConfig,
+      signal: timeoutCtrl.signal,
       headers: {
         ...defaultHeaders,
         ...(headers as Record<string, string>),
@@ -162,12 +209,27 @@ export class ApiClient {
     try {
       response = await fetch(url, config);
     } catch (err: unknown) {
+      timeoutCtrl.cleanup();
+      if (timeoutCtrl.didTimeout()) {
+        throw new ApiError(
+          'REQUEST_TIMEOUT',
+          'The request timed out while waiting for the server. Please try again.',
+          504,
+          { retryable: true }
+        );
+      }
+      if (parentSignal?.aborted) {
+        throw new ApiError('REQUEST_ABORTED', 'Request was cancelled.', 499, { retryable: false });
+      }
       throw new ApiError(
         'NETWORK_ERROR',
-        err instanceof Error ? err.message : 'Network request failed. Is the Cloudflare Worker running?',
-        0
+        err instanceof Error ? err.message : 'Network request failed. Please check your connection and try again.',
+        0,
+        { retryable: true }
       );
     }
+
+    timeoutCtrl.cleanup();
 
     let payload: any = null;
     const contentType = response.headers.get('content-type');
@@ -185,6 +247,77 @@ export class ApiClient {
     }
 
     return payload?.data !== undefined ? (payload.data as T) : (payload as T);
+  }
+
+  async streamPost(
+    endpoint: string,
+    body: unknown,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {}
+  ): Promise<Response> {
+    const url = this.buildUrl(endpoint);
+    const defaultHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream, application/json',
+    };
+
+    const authHeader = await this.resolveAuthHeader();
+    if (authHeader) {
+      defaultHeaders['Authorization'] = authHeader;
+    }
+
+    const timeoutMs = options.timeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+    const timeoutCtrl = this.createTimeoutSignal(options.signal, timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: defaultHeaders,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: timeoutCtrl.signal,
+      });
+    } catch (err: unknown) {
+      timeoutCtrl.cleanup();
+      if (timeoutCtrl.didTimeout()) {
+        throw new ApiError(
+          'REQUEST_TIMEOUT',
+          'The connection timed out before receiving a response. Please retry.',
+          504,
+          { retryable: true }
+        );
+      }
+      if (options.signal?.aborted) {
+        throw new ApiError('REQUEST_ABORTED', 'Generation was cancelled.', 499, { retryable: false });
+      }
+      throw new ApiError(
+        'NETWORK_ERROR',
+        err instanceof Error ? err.message : 'Network request failed. Please try again.',
+        0,
+        { retryable: true }
+      );
+    }
+
+    timeoutCtrl.cleanup();
+
+    if (!response.ok) {
+      let payload: any = null;
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        try {
+          payload = await response.json();
+        } catch {}
+      }
+      const code = payload?.error?.code || `HTTP_${response.status}`;
+      const message =
+        payload?.error?.message ||
+        (response.status === 524
+          ? 'The AI provider gateway timed out (HTTP 524). Please retry.'
+          : response.statusText || `Request failed with HTTP ${response.status}`);
+      const details = payload?.error?.details;
+      throw new ApiError(code, message, response.status, details);
+    }
+
+    return response;
   }
 
   get<T>(endpoint: string, params?: Record<string, any>): Promise<T> {

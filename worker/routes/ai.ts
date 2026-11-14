@@ -1,5 +1,5 @@
 import { Env, AuthenticatedUser } from '../types';
-import { jsonResponse, errorResponse } from '../utils/response';
+import { jsonResponse, errorResponse, CORS_HEADERS } from '../utils/response';
 import { SearchManager } from '../services/search/manager';
 import { TavilySearchProvider } from '../services/search/tavily';
 import { DuckDuckGoSearchProvider } from '../services/search/duckduckgo';
@@ -63,6 +63,8 @@ export async function handleAiChat(
   env: Env,
   user: AuthenticatedUser
 ): Promise<Response> {
+  const requestStartMs = Date.now();
+
   // 1. Guard: Check AI Capability (Cloudflare Workers AI default or active external BYOK / env providers)
   const userCredentials = await getUserCredentials(env.DB, user.id, env);
   const modelRegistry = ModelProviderRegistry.forUser(env, userCredentials);
@@ -99,6 +101,9 @@ export async function handleAiChat(
       400
     );
   }
+
+  const wantStream = body.stream === true;
+  const isRetry = body.retry === true;
 
   let conversationId: string | null =
     typeof body.conversationId === 'string' && body.conversationId.trim()
@@ -149,6 +154,8 @@ export async function handleAiChat(
     deprecationNotice = DEPRECATED_MODEL_MAP[targetModelId].notice;
     targetModelId = DEPRECATED_MODEL_MAP[targetModelId].replacementId;
   }
+
+  const resolvedPrimaryProvider = modelRegistry.resolveProvider(targetModelId);
 
   // Explicit web search mode requested by client ('auto' | boolean)
   const webSearchMode = body.webSearch === true ? true : body.webSearch === false ? false : undefined;
@@ -219,22 +226,43 @@ export async function handleAiChat(
     );
   }
 
-  // 4. Persist User Message to D1 (role: user, strictly bound to verified user.id)
-  const userMsgId = `msg_u_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  try {
-    await env.DB.prepare(
-      `INSERT INTO messages (id, conversation_id, user_id, role, content, created_at)
-       VALUES (?, ?, ?, 'user', ?, ?)`
-    )
-      .bind(userMsgId, conversationId, user.id, prompt, now)
-      .run();
-  } catch (err: unknown) {
-    console.error('[AI Chat] Failed to persist user message in database:', err);
-    return errorResponse(
-      'DATABASE_ERROR',
-      'Failed to persist user message in database.',
-      500
-    );
+  // 4. Persist User Message to D1 (or reuse existing on retry to avoid duplicate user messages)
+  let userMsgId = `msg_u_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  let reusedExistingUserMsg = false;
+
+  if (isRetry && conversationId) {
+    try {
+      const latestMsg = await env.DB.prepare(
+        `SELECT id, role, content FROM messages
+         WHERE conversation_id = ? AND user_id = ?
+         ORDER BY created_at DESC, id DESC LIMIT 1`
+      )
+        .bind(conversationId, user.id)
+        .first<{ id: string; role: string; content: string }>();
+
+      if (latestMsg && latestMsg.role === 'user' && latestMsg.content.trim() === prompt) {
+        userMsgId = latestMsg.id;
+        reusedExistingUserMsg = true;
+      }
+    } catch {}
+  }
+
+  if (!reusedExistingUserMsg) {
+    try {
+      await env.DB.prepare(
+        `INSERT INTO messages (id, conversation_id, user_id, role, content, created_at)
+         VALUES (?, ?, ?, 'user', ?, ?)`
+      )
+        .bind(userMsgId, conversationId, user.id, prompt, now)
+        .run();
+    } catch (err: unknown) {
+      console.error('[AI Chat] Failed to persist user message in database:', err);
+      return errorResponse(
+        'DATABASE_ERROR',
+        'Failed to persist user message in database.',
+        500
+      );
+    }
   }
 
   // 5. Orbit Web Intelligence: Intelligent Detection & Source Retrieval
@@ -308,32 +336,263 @@ export async function handleAiChat(
 
   aiMessages.push({ role: 'user', content: prompt });
 
-  // 8. Execute Model via Modular Provider Registry
+  const isExplicitByokModel =
+    targetModelId !== WORKERS_AI_MODEL && targetModelId !== 'orbit-agent-v2';
+
+  // Fallback determination:
+  // 1. If body.allowFallback is boolean, explicitly respect client preference.
+  // 2. If the model is deprecated, permit fallback so user receives response with deprecationNotice.
+  // 3. Otherwise, default to false for BYOK models (prevent silent fallback) and true for default model.
+  const allowFallback =
+    typeof body.allowFallback === 'boolean'
+      ? body.allowFallback
+      : deprecationNotice
+      ? true
+      : !isExplicitByokModel;
+
+  const webSearchPayload = {
+    triggered: requiresSearch,
+    sourcesCount: searchSources.length,
+    sources: searchSources.map((s) => ({
+      title: s.title,
+      url: s.url,
+      publishedDate: s.publishedDate,
+    })),
+    retrievedAt: searchRetrievedAt,
+    cached: searchCached,
+    notice: searchNotice,
+  };
+
+  console.info('[AI Chat] Dispatching request', {
+    provider: resolvedPrimaryProvider.id,
+    model: targetModelId,
+    stream: wantStream,
+    retry: isRetry,
+    allowFallback,
+    historyTurns: aiMessages.length - 1,
+  });
+
+  // 8A. Real SSE Streaming Execution (prevents Cloudflare 524 TTFB timeouts)
+  if (wantStream) {
+    const encoder = new TextEncoder();
+    const sseEncode = (event: Record<string, unknown>): Uint8Array =>
+      encoder.encode(`data: ${JSON.stringify(event)}\n\n`);
+
+    let upstreamReader: ReadableStreamDefaultReader<any> | null = null;
+
+    const sseStream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        let assistantText = '';
+        let executedModel = targetModelId;
+        let executedProvider = resolvedPrimaryProvider.id;
+        let fallbackUsed = false;
+        let finalUsage: Record<string, number | undefined> | undefined;
+
+        try {
+          // Immediately flush metadata event so client & edge proxy receive first bytes right away
+          controller.enqueue(
+            sseEncode({
+              type: 'meta',
+              conversationId,
+              userMessageId: userMsgId,
+              model: targetModelId,
+              provider: resolvedPrimaryProvider.id,
+              deprecationNotice,
+              webSearch: webSearchPayload,
+            })
+          );
+
+          const streamResult = await modelRegistry.executeStream({
+            messages: aiMessages as ModelMessage[],
+            maxTokens: 2048,
+            modelId: targetModelId,
+            allowFallback,
+            signal: request.signal,
+          });
+
+          executedModel = streamResult.modelId;
+          executedProvider = streamResult.provider;
+          fallbackUsed = streamResult.fallbackUsed;
+
+          upstreamReader = streamResult.stream.getReader();
+
+          while (true) {
+            const { done, value } = await upstreamReader.read();
+            if (done) break;
+
+            if (value.type === 'delta' && value.text) {
+              assistantText += value.text;
+              controller.enqueue(
+                sseEncode({
+                  type: 'delta',
+                  text: value.text,
+                })
+              );
+            } else if (value.type === 'done') {
+              if (value.usage) {
+                finalUsage = value.usage;
+              }
+            }
+          }
+
+          const finalOutput = assistantText.trim();
+          if (!finalOutput) {
+            throw new ModelProviderError(
+              'The AI provider completed without returning any text.',
+              {
+                code: 'EMPTY_OUTPUT',
+                provider: executedProvider,
+                statusCode: 502,
+                isRetryable: true,
+              }
+            );
+          }
+
+          const assistantMsgId = `msg_a_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          const assistantNow = new Date().toISOString();
+
+          try {
+            await env.DB.prepare(
+              `INSERT INTO messages (id, conversation_id, user_id, role, content, created_at)
+               VALUES (?, ?, ?, 'assistant', ?, ?)`
+            )
+              .bind(assistantMsgId, conversationId, user.id, finalOutput, assistantNow)
+              .run();
+
+            await env.DB.prepare(
+              `UPDATE conversations SET updated_at = ? WHERE id = ? AND user_id = ?`
+            )
+              .bind(assistantNow, conversationId, user.id)
+              .run();
+          } catch (persistErr) {
+            console.error('[AI Chat Stream] Failed to persist assistant response:', persistErr);
+            controller.enqueue(
+              sseEncode({
+                type: 'error',
+                code: 'PERSISTENCE_FAILED',
+                message: 'The AI response was generated successfully, but could not be saved to your conversation history.',
+                status: 500,
+                retryable: false,
+                provider: executedProvider,
+                model: executedModel,
+                conversationId,
+                partialText: finalOutput,
+              })
+            );
+            controller.close();
+            return;
+          }
+
+          console.info('[AI Chat Stream] Completed successfully', {
+            provider: executedProvider,
+            model: executedModel,
+            fallbackUsed,
+            outputChars: finalOutput.length,
+            elapsedMs: Date.now() - requestStartMs,
+          });
+
+          controller.enqueue(
+            sseEncode({
+              type: 'done',
+              messageId: assistantMsgId,
+              conversationId,
+              model: executedModel,
+              provider: executedProvider,
+              fallbackUsed,
+              deprecationNotice,
+              usage: finalUsage,
+              webSearch: webSearchPayload,
+            })
+          );
+          controller.close();
+        } catch (err: unknown) {
+          const elapsedMs = Date.now() - requestStartMs;
+
+          if (err instanceof ModelProviderError) {
+            console.error('[AI Chat Stream] Provider error', {
+              provider: err.provider,
+              model: targetModelId,
+              code: err.code,
+              statusCode: err.statusCode,
+              upstreamStatus: err.upstreamStatus,
+              retryable: err.isRetryable,
+              partialChars: assistantText.length,
+              elapsedMs,
+            });
+
+            controller.enqueue(
+              sseEncode({
+                type: 'error',
+                code: err.code,
+                message: err.message,
+                status: err.statusCode,
+                retryable: err.isRetryable,
+                upstreamStatus: err.upstreamStatus,
+                provider: err.provider,
+                model: targetModelId,
+                conversationId,
+                partialText: assistantText.trim() || undefined,
+              })
+            );
+          } else {
+            const safeMsg = err instanceof Error ? err.message : 'Model streaming error';
+            console.error('[AI Chat Stream] Unexpected stream failure', {
+              provider: executedProvider,
+              model: targetModelId,
+              partialChars: assistantText.length,
+              elapsedMs,
+            });
+
+            controller.enqueue(
+              sseEncode({
+                type: 'error',
+                code: 'STREAM_INTERRUPTED',
+                message: `Failed to complete response stream: ${safeMsg}`,
+                status: 502,
+                retryable: true,
+                provider: executedProvider,
+                model: targetModelId,
+                conversationId,
+                partialText: assistantText.trim() || undefined,
+              })
+            );
+          }
+
+          controller.close();
+        }
+      },
+      async cancel() {
+        if (upstreamReader) {
+          await upstreamReader.cancel().catch(() => {});
+        }
+      },
+    });
+
+    return new Response(sseStream, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+        ...CORS_HEADERS,
+      },
+    });
+  }
+
+  // 8B. Standard JSON Execution (Backwards-compatible for non-streaming clients)
   let assistantText = '';
   let executedModel = WORKERS_AI_MODEL;
-  let executedProvider = 'cloudflare';
+  let executedProvider = resolvedPrimaryProvider.id;
   let fallbackUsed = false;
 
   try {
-    const isExplicitByokModel =
-      targetModelId !== WORKERS_AI_MODEL && targetModelId !== 'orbit-agent-v2';
-
-    // Fallback determination:
-    // 1. If body.allowFallback is boolean, explicitly respect client preference.
-    // 2. If the model is deprecated, permit fallback so user receives response with deprecationNotice.
-    // 3. Otherwise, default to false for BYOK models (prevent silent fallback) and true for default model.
-    const allowFallback =
-      typeof body.allowFallback === 'boolean'
-        ? body.allowFallback
-        : deprecationNotice
-        ? true
-        : !isExplicitByokModel;
-
     const execResult = await modelRegistry.execute({
       messages: aiMessages as ModelMessage[],
       maxTokens: 2048,
       modelId: targetModelId,
       allowFallback,
+      signal: request.signal,
     });
 
     assistantText = execResult.text;
@@ -341,13 +600,33 @@ export async function handleAiChat(
     executedProvider = execResult.provider;
     fallbackUsed = Boolean(execResult.fallbackUsed);
   } catch (err: unknown) {
+    const elapsedMs = Date.now() - requestStartMs;
+
     if (err instanceof ModelProviderError) {
+      console.error('[AI Chat] Provider error', {
+        provider: err.provider,
+        model: targetModelId,
+        code: err.code,
+        statusCode: err.statusCode,
+        upstreamStatus: err.upstreamStatus,
+        retryable: err.isRetryable,
+        elapsedMs,
+      });
+
       return errorResponse(err.code, err.message, err.statusCode, {
         provider: err.provider,
         model: targetModelId,
+        retryable: err.isRetryable,
+        upstreamStatus: err.upstreamStatus,
+        conversationId,
       });
     }
     const message = err instanceof Error ? err.message : 'Model execution error';
+    console.error('[AI Chat] Unexpected execution failure', {
+      provider: executedProvider,
+      model: targetModelId,
+      elapsedMs,
+    });
     return errorResponse(
       'AI_GENERATION_FAILED',
       `Failed to generate response from model: ${message}`,
@@ -355,6 +634,8 @@ export async function handleAiChat(
       {
         provider: executedProvider,
         model: targetModelId,
+        retryable: true,
+        conversationId,
       }
     );
   }
@@ -391,6 +672,14 @@ export async function handleAiChat(
     );
   }
 
+  console.info('[AI Chat] Completed successfully', {
+    provider: executedProvider,
+    model: executedModel,
+    fallbackUsed,
+    outputChars: assistantText.length,
+    elapsedMs: Date.now() - requestStartMs,
+  });
+
   // 10. Return Structured JSON Response with Web Intelligence & Model Metadata
   return jsonResponse(
     {
@@ -401,18 +690,7 @@ export async function handleAiChat(
       provider: executedProvider,
       fallbackUsed,
       deprecationNotice,
-      webSearch: {
-        triggered: requiresSearch,
-        sourcesCount: searchSources.length,
-        sources: searchSources.map((s) => ({
-          title: s.title,
-          url: s.url,
-          publishedDate: s.publishedDate,
-        })),
-        retrievedAt: searchRetrievedAt,
-        cached: searchCached,
-        notice: searchNotice,
-      },
+      webSearch: webSearchPayload,
     },
     200
   );

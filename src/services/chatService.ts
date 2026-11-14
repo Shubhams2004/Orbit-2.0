@@ -3,13 +3,23 @@ import { agentService } from './agentService';
 import { apiClient, ApiError, isProductionEnv } from './apiClient';
 import { isDemoConversationId } from './conversationService';
 
+export interface StreamMetaUpdate {
+  conversationId?: string;
+  model?: string;
+  provider?: string;
+  webSearch?: any;
+  deprecationNotice?: string;
+}
+
 export interface SendMessageOptions {
   conversationId: string;
   content: string;
   modelId: string;
   attachments?: ChatAttachment[];
   webSearch?: boolean;
-  onChunk?: (accumulatedContent: string) => void;
+  retry?: boolean;
+  onChunk?: (accumulatedContent: string, meta?: StreamMetaUpdate) => void;
+  onMeta?: (meta: StreamMetaUpdate) => void;
   signal?: AbortSignal;
   tasksContext?: Task[];
   projectsContext?: Project[];
@@ -233,9 +243,113 @@ export class MockChatService implements IChatService {
     return true;
   }
 
+  private formatReadableAiError(err: unknown, modelId: string): {
+    message: string;
+    code: string;
+    status: number;
+    retryable: boolean;
+    provider?: string;
+    partialText?: string;
+    conversationId?: string;
+  } {
+    if (err instanceof ApiError) {
+      const details = (err.details || {}) as Record<string, any>;
+      const provider = typeof details.provider === 'string' ? details.provider : undefined;
+      const partialText = typeof details.partialText === 'string' ? details.partialText : undefined;
+      const conversationId =
+        typeof details.conversationId === 'string' ? details.conversationId : undefined;
+      const raw = err.message || '';
+      const lower = raw.toLowerCase();
+
+      if (err.code === 'GATEWAY_TIMEOUT' || err.code === 'UPSTREAM_TIMEOUT' || err.code === 'REQUEST_TIMEOUT' || err.status === 524 || err.status === 504 || lower.includes('524')) {
+        return {
+          message:
+            'The AI provider timed out while waiting for a response. This can happen during high load or complex prompts — click Retry to try again, or switch to a faster model.',
+          code: err.code,
+          status: err.status || 504,
+          retryable: true,
+          provider,
+          partialText,
+          conversationId,
+        };
+      }
+
+      if (err.code === 'QUOTA_EXHAUSTED' || err.status === 429) {
+        return {
+          message:
+            'Rate limit or API quota reached for your connected provider. Wait a brief moment and click Retry, or verify your provider billing/quota.',
+          code: err.code,
+          status: 429,
+          retryable: true,
+          provider,
+          partialText,
+          conversationId,
+        };
+      }
+
+      if (err.code === 'AUTHENTICATION_FAILED' || err.status === 401 || err.status === 403) {
+        return {
+          message: raw.includes('API key')
+            ? raw.replace(/^Gemini provider error:\s*/i, '')
+            : 'Authentication failed for the selected AI provider. Please verify your API key in the model selector.',
+          code: err.code,
+          status: err.status || 401,
+          retryable: false,
+          provider,
+          partialText,
+          conversationId,
+        };
+      }
+
+      if (err.code === 'MODEL_NOT_FOUND' || err.status === 404) {
+        return {
+          message: `The selected model ("${modelId}") is unsupported or unavailable for your API key. Please select another model.`,
+          code: err.code,
+          status: 404,
+          retryable: false,
+          provider,
+          partialText,
+          conversationId,
+        };
+      }
+
+      if (err.code === 'STREAM_INTERRUPTED') {
+        return {
+          message: partialText
+            ? 'The response stream was interrupted before completion. Your partial response was preserved above — click Retry to try again.'
+            : 'The streaming connection was interrupted. Please click Retry to try again.',
+          code: err.code,
+          status: err.status || 502,
+          retryable: true,
+          provider,
+          partialText,
+          conversationId,
+        };
+      }
+
+      return {
+        message: raw.replace(/^(Gemini|OpenAI|Anthropic) provider error:\s*/i, '') || 'The AI provider could not complete this request.',
+        code: err.code,
+        status: err.status || 500,
+        retryable: Boolean(details.retryable ?? (err.status >= 500 || err.status === 0)),
+        provider,
+        partialText,
+        conversationId,
+      };
+    }
+
+    const msg = err instanceof Error ? err.message : 'AI model request failed.';
+    return {
+      message: msg,
+      code: 'AI_REQUEST_FAILED',
+      status: 500,
+      retryable: true,
+    };
+  }
+
   /**
-   * Generates a context-aware mock AI response with token streaming simulation
-   * and agent capabilities (proposed actions) when relevant.
+   * Sends a message via real SSE streaming from Cloudflare Workers (/api/v1/ai/chat),
+   * falling back to standard JSON parsing if a non-streaming response is returned.
    */
   async sendMessage(options: SendMessageOptions): Promise<ChatMessage> {
     const {
@@ -243,7 +357,9 @@ export class MockChatService implements IChatService {
       content,
       modelId,
       attachments = [],
+      retry = false,
       onChunk,
+      onMeta,
       signal,
       tasksContext = [],
       projectsContext = [],
@@ -256,115 +372,294 @@ export class MockChatService implements IChatService {
 
     const messages = targetConvId ? this.loadMessages(targetConvId) : [];
 
-    // 1. Record User Message
-    const userMsg: ChatMessage = {
-      id: `msg_u_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      conversationId: targetConvId,
-      role: 'user',
-      content,
-      timestamp: new Date().toISOString(),
-      modelUsed: modelId,
-      attachments,
-      status: 'complete',
-    };
+    // 1. Record User Message locally unless this is a retry of an existing failed turn
+    let userMsg: ChatMessage | undefined;
+    const lastSavedMsg = messages[messages.length - 1];
+    const shouldSkipLocalUserPush =
+      retry &&
+      ((lastSavedMsg?.role === 'user' && lastSavedMsg.content.trim() === content.trim()) ||
+        (messages.length >= 2 &&
+          messages[messages.length - 1]?.status === 'error' &&
+          messages[messages.length - 2]?.role === 'user' &&
+          messages[messages.length - 2]?.content.trim() === content.trim()));
 
-    messages.push(userMsg);
-    if (targetConvId) {
-      this.saveMessages(targetConvId, messages);
+    if (retry && messages[messages.length - 1]?.status === 'error') {
+      messages.pop();
     }
 
-    // 2. Obtain AI Response (Live Cloudflare Workers AI with graceful local fallback)
+    if (!shouldSkipLocalUserPush) {
+      userMsg = {
+        id: `msg_u_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        conversationId: targetConvId,
+        role: 'user',
+        content,
+        timestamp: new Date().toISOString(),
+        modelUsed: modelId,
+        attachments,
+        status: 'complete',
+      };
+      messages.push(userMsg);
+      if (targetConvId) {
+        this.saveMessages(targetConvId, messages);
+      }
+    }
+
+    // 2. Obtain AI Response via Real SSE Streaming
     let fullText = '';
     let assistantMsgId = `msg_a_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     let activeModelName = modelId;
+    let activeProvider: string | undefined;
+    let fallbackUsed = false;
     let proposedActions: AgentAction[] | undefined;
     let isSimulated = false;
     let webSearchMeta: any = undefined;
+    let streamAlreadyRendered = false;
 
     try {
-      const aiResult = await apiClient.post<{
-        response: string;
-        conversationId: string;
-        messageId: string;
-        model: string;
-        provider?: string;
-        fallbackUsed?: boolean;
-        webSearch?: any;
-      }>('/api/v1/ai/chat', {
-        prompt: content,
-        conversationId: apiConversationId,
-        model: modelId,
-        allowFallback: false,
-        webSearch: options.webSearch,
-      });
+      const response = await apiClient.streamPost(
+        '/api/v1/ai/chat',
+        {
+          prompt: content,
+          conversationId: apiConversationId,
+          model: modelId,
+          allowFallback: false,
+          webSearch: options.webSearch,
+          stream: true,
+          retry,
+        },
+        { signal }
+      );
 
-      if (aiResult && aiResult.response) {
-        fullText = aiResult.response;
-        assistantMsgId = aiResult.messageId || assistantMsgId;
-        activeModelName = aiResult.model || modelId;
-        webSearchMeta = aiResult.webSearch;
+      const contentType = response.headers.get('content-type') || '';
 
-        // When the server creates a new conversation, update the target conversation ID
-        if (aiResult.conversationId) {
-          targetConvId = aiResult.conversationId;
-          userMsg.conversationId = targetConvId;
+      if (contentType.includes('text/event-stream') && response.body) {
+        streamAlreadyRendered = true;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let receivedDone = false;
+        let streamErrorPayload: any = null;
+
+        const handleSseLine = (rawLine: string) => {
+          if (!rawLine.startsWith('data:')) return;
+          const jsonText = rawLine.slice(5).trim();
+          if (!jsonText) return;
+
+          let evt: any;
+          try {
+            evt = JSON.parse(jsonText);
+          } catch {
+            return;
+          }
+
+          if (evt.type === 'meta') {
+            if (evt.conversationId) {
+              targetConvId = evt.conversationId;
+              if (userMsg) userMsg.conversationId = targetConvId;
+            }
+            if (evt.model) activeModelName = evt.model;
+            if (evt.provider) activeProvider = evt.provider;
+            if (evt.webSearch) webSearchMeta = evt.webSearch;
+            onMeta?.({
+              conversationId: targetConvId,
+              model: activeModelName,
+              provider: activeProvider,
+              webSearch: webSearchMeta,
+              deprecationNotice: evt.deprecationNotice,
+            });
+          } else if (evt.type === 'delta' && typeof evt.text === 'string') {
+            fullText += evt.text;
+            onChunk?.(fullText, {
+              conversationId: targetConvId,
+              model: activeModelName,
+              provider: activeProvider,
+              webSearch: webSearchMeta,
+            });
+          } else if (evt.type === 'done') {
+            receivedDone = true;
+            if (evt.messageId) assistantMsgId = evt.messageId;
+            if (evt.conversationId) targetConvId = evt.conversationId;
+            if (evt.model) activeModelName = evt.model;
+            if (evt.provider) activeProvider = evt.provider;
+            fallbackUsed = Boolean(evt.fallbackUsed);
+            if (evt.webSearch) webSearchMeta = evt.webSearch;
+          } else if (evt.type === 'error') {
+            streamErrorPayload = evt;
+          }
+        };
+
+        try {
+          while (true) {
+            if (signal?.aborted) {
+              await reader.cancel().catch(() => {});
+              const stoppedMsg: ChatMessage = {
+                id: assistantMsgId,
+                conversationId: targetConvId,
+                role: 'assistant',
+                content: fullText ? `${fullText}\n\n[Generation stopped by user]` : '[Generation stopped by user]',
+                timestamp: new Date().toISOString(),
+                modelUsed: activeModelName,
+                provider: activeProvider,
+                webSearch: webSearchMeta,
+                status: 'stopped',
+                isSimulated: false,
+              };
+              messages.push(stoppedMsg);
+              if (targetConvId) this.saveMessages(targetConvId, messages);
+              onChunk?.(stoppedMsg.content);
+              return stoppedMsg;
+            }
+
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split(/\r?\n/);
+            buffer = lines.pop() ?? '';
+
+            for (const line of lines) {
+              handleSseLine(line);
+            }
+
+            if (streamErrorPayload) {
+              await reader.cancel().catch(() => {});
+              break;
+            }
+          }
+
+          if (!streamErrorPayload) {
+            const rem = buffer + decoder.decode();
+            for (const line of rem.split(/\r?\n/)) {
+              handleSseLine(line);
+            }
+          }
+        } catch (readErr: unknown) {
+          await reader.cancel().catch(() => {});
+          if (signal?.aborted) {
+            const stoppedMsg: ChatMessage = {
+              id: assistantMsgId,
+              conversationId: targetConvId,
+              role: 'assistant',
+              content: fullText ? `${fullText}\n\n[Generation stopped by user]` : '[Generation stopped by user]',
+              timestamp: new Date().toISOString(),
+              modelUsed: activeModelName,
+              provider: activeProvider,
+              webSearch: webSearchMeta,
+              status: 'stopped',
+              isSimulated: false,
+            };
+            messages.push(stoppedMsg);
+            if (targetConvId) this.saveMessages(targetConvId, messages);
+            onChunk?.(stoppedMsg.content);
+            return stoppedMsg;
+          }
+
+          throw new ApiError(
+            'STREAM_INTERRUPTED',
+            readErr instanceof Error ? readErr.message : 'Stream connection interrupted.',
+            502,
+            {
+              provider: activeProvider,
+              model: activeModelName,
+              retryable: true,
+              partialText: fullText.trim() || undefined,
+              conversationId: targetConvId,
+            }
+          );
+        }
+
+        if (streamErrorPayload) {
+          const partial =
+            typeof streamErrorPayload.partialText === 'string' && streamErrorPayload.partialText
+              ? streamErrorPayload.partialText
+              : fullText.trim() || undefined;
+          throw new ApiError(
+            streamErrorPayload.code || 'PROVIDER_ERROR',
+            streamErrorPayload.message || 'AI streaming request failed.',
+            streamErrorPayload.status || 502,
+            {
+              provider: streamErrorPayload.provider || activeProvider,
+              model: streamErrorPayload.model || activeModelName,
+              retryable: streamErrorPayload.retryable ?? true,
+              upstreamStatus: streamErrorPayload.upstreamStatus,
+              partialText: partial,
+              conversationId: streamErrorPayload.conversationId || targetConvId,
+            }
+          );
+        }
+
+        if (!receivedDone) {
+          throw new ApiError(
+            'STREAM_INTERRUPTED',
+            'The response stream ended unexpectedly before finishing.',
+            502,
+            {
+              provider: activeProvider,
+              model: activeModelName,
+              retryable: true,
+              partialText: fullText.trim() || undefined,
+              conversationId: targetConvId,
+            }
+          );
         }
       } else {
-        throw new ApiError('EMPTY_AI_RESPONSE', 'Empty AI response received from Cloudflare Workers AI.', 502);
+        // Non-streaming JSON response fallback
+        const jsonBody: any = await response.json();
+        const aiResult = jsonBody?.data !== undefined ? jsonBody.data : jsonBody;
+        if (aiResult && aiResult.response) {
+          fullText = aiResult.response;
+          assistantMsgId = aiResult.messageId || assistantMsgId;
+          activeModelName = aiResult.model || modelId;
+          activeProvider = aiResult.provider;
+          fallbackUsed = Boolean(aiResult.fallbackUsed);
+          webSearchMeta = aiResult.webSearch;
+
+          if (aiResult.conversationId) {
+            targetConvId = aiResult.conversationId;
+            if (userMsg) userMsg.conversationId = targetConvId;
+          }
+        } else {
+          throw new ApiError('EMPTY_AI_RESPONSE', 'Empty AI response received from server.', 502);
+        }
       }
     } catch (err: unknown) {
-      const isAuthError =
-        (err instanceof ApiError && (err.status === 401 || err.status === 403 || err.code.includes('AUTH') || err.code.includes('TOKEN'))) ||
-        (err instanceof Error && (
-          err.message.includes('401') ||
-          err.message.includes('403') ||
-          err.message.toLowerCase().includes('token') ||
-          err.message.toLowerCase().includes('unauthorized') ||
-          err.message.toLowerCase().includes('bearer')
-        ));
+      const formatted = this.formatReadableAiError(err, modelId);
 
-      // Never silently fall back to simulated responses on HTTP 401, 403, or authentication errors
-      if (isAuthError) {
-        const errorMsg = err instanceof Error ? err.message : 'Authentication required to use AI chat.';
-        const assistantErrorMsg: ChatMessage = {
-          id: assistantMsgId,
-          conversationId: targetConvId,
-          role: 'assistant',
-          content: `⚠️ Authentication Error: ${errorMsg}`,
-          timestamp: new Date().toISOString(),
-          modelUsed: modelId,
-          status: 'error',
-          errorMessage: errorMsg,
-          isSimulated: false,
-        };
-        messages.push(assistantErrorMsg);
-        if (targetConvId) {
-          this.saveMessages(targetConvId, messages);
-        }
-        throw err;
-      }
+      const isAuthError =
+        formatted.code.includes('AUTH') ||
+        formatted.code.includes('TOKEN') ||
+        formatted.status === 401 ||
+        formatted.status === 403;
 
       const isByokModel = modelId !== 'orbit-agent-v2';
 
-      // Never fall back to simulated responses in production, or when using an explicitly selected BYOK model, or when the server returned an API error
-      if (isProductionEnv() || isByokModel || err instanceof ApiError) {
-        const errorMsg = err instanceof Error ? err.message : 'AI model request failed.';
+      // Never fall back to simulated responses on auth errors, in production, for BYOK models, or when server returned an ApiError
+      if (isAuthError || isProductionEnv() || isByokModel || err instanceof ApiError) {
         const assistantErrorMsg: ChatMessage = {
           id: assistantMsgId,
-          conversationId: targetConvId,
+          conversationId: formatted.conversationId || targetConvId,
           role: 'assistant',
-          content: `⚠️ Provider Error: ${errorMsg}`,
+          content: formatted.partialText || '',
           timestamp: new Date().toISOString(),
           modelUsed: modelId,
+          provider: formatted.provider,
           status: 'error',
-          errorMessage: errorMsg,
+          errorMessage: formatted.message,
+          retryable: formatted.retryable,
           isSimulated: false,
         };
         messages.push(assistantErrorMsg);
         if (targetConvId) {
           this.saveMessages(targetConvId, messages);
         }
-        throw err;
+
+        throw new ApiError(formatted.code, formatted.message, formatted.status, {
+          provider: formatted.provider,
+          model: modelId,
+          retryable: formatted.retryable,
+          partialText: formatted.partialText,
+          conversationId: formatted.conversationId || targetConvId,
+        });
       }
 
       // Local fallback in non-production development only when Workers AI binding is unavailable for the default model
@@ -380,17 +675,19 @@ export class MockChatService implements IChatService {
       isSimulated = true;
     }
 
-    // 3. Simulate Streaming with Chunks for Responsive UI
+    // 3. Persist Completed Assistant Message & Stream JSON Fallback if Needed
     const assistantMsg: ChatMessage = {
       id: assistantMsgId,
       conversationId: targetConvId,
       role: 'assistant',
-      content: '',
+      content: streamAlreadyRendered ? fullText.trim() : '',
       timestamp: new Date().toISOString(),
       modelUsed: activeModelName,
+      provider: activeProvider,
+      fallbackUsed,
       actions: proposedActions,
       webSearch: webSearchMeta,
-      status: 'streaming',
+      status: streamAlreadyRendered ? 'complete' : 'streaming',
       isSimulated,
     };
 
@@ -399,11 +696,23 @@ export class MockChatService implements IChatService {
       this.saveMessages(targetConvId, messages);
     }
 
-    // Token-by-token streaming simulation
+    if (streamAlreadyRendered) {
+      assistantMsg.content = fullText.trim();
+      assistantMsg.status = 'complete';
+      onChunk?.(assistantMsg.content, {
+        conversationId: targetConvId,
+        model: activeModelName,
+        provider: activeProvider,
+        webSearch: webSearchMeta,
+      });
+      return assistantMsg;
+    }
+
+    // Token-by-token streaming pacing only for non-SSE JSON/local simulated responses
     const words = fullText.split(' ');
     let accumulated = '';
-    const chunkSize = 3; // stream 3 words per tick
-    const delayMs = 35; // smooth typing pace
+    const chunkSize = 3;
+    const delayMs = 35;
 
     try {
       for (let i = 0; i < words.length; i += chunkSize) {
