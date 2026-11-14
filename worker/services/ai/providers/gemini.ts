@@ -155,7 +155,7 @@ export class GeminiModelProvider implements IModelProvider {
   }
 
   private prepareRequest(options: ModelExecutionOptions): GeminiPreparedRequest {
-    const targetModel = (options.modelId || 'gemini-2.5-flash').replace(/^models\//, '');
+    const targetModel = (options.modelId || 'gemini-3-flash-preview').replace(/^models\//, '');
 
     // 1. Separate system instructions from conversational history
     const systemMessages = options.messages.filter((m) => m.role === 'system');
@@ -215,18 +215,20 @@ export class GeminiModelProvider implements IModelProvider {
       });
     }
 
-    // 3. Build generationConfig
+    // 3. Build generationConfig (Gemini 3/3.1/4 thinking models share maxOutputTokens with thinking tokens)
+    const isThinkingOrNextGen =
+      targetModel.includes('gemini-3') ||
+      targetModel.includes('gemini-4') ||
+      targetModel.includes('thinking') ||
+      targetModel.includes('pro');
+
+    const requestedMaxTokens = options.maxTokens || 2048;
     const generationConfig: Record<string, any> = {
-      maxOutputTokens: options.maxTokens || 2048,
+      maxOutputTokens: isThinkingOrNextGen ? Math.max(requestedMaxTokens, 8192) : requestedMaxTokens,
     };
 
-    // Google Gemini guidelines: Do not send temperature to gemini-3.8-* or gemini-4-* models
-    const isReasoningOrPreview =
-      targetModel.includes('gemini-3.8') ||
-      targetModel.includes('gemini-4') ||
-      targetModel.includes('thinking');
-
-    if (!isReasoningOrPreview && options.temperature !== undefined) {
+    // Google Gemini guidelines: omit custom temperature for Gemini 3/4/thinking models
+    if (!isThinkingOrNextGen && options.temperature !== undefined) {
       generationConfig.temperature = options.temperature;
     }
 
@@ -317,8 +319,14 @@ export class GeminiModelProvider implements IModelProvider {
       });
     }
 
-    // Model Not Found / Unsupported Model (never retry)
-    if (status === 404 || lowerMsg.includes('not found for api version') || lowerMsg.includes('not supported for generatecontent')) {
+    // Model Not Found / Restricted / Unsupported Model (never retry)
+    if (
+      status === 404 ||
+      lowerMsg.includes('no longer available to new users') ||
+      lowerMsg.includes('not found for api version') ||
+      lowerMsg.includes('not supported for generatecontent') ||
+      lowerMsg.includes('is not found')
+    ) {
       const detail =
         jsonErrorMessage ||
         `The selected Gemini model "${targetModel}" is unsupported or unavailable for your API key.`;
@@ -422,9 +430,9 @@ export class GeminiModelProvider implements IModelProvider {
     payload: Record<string, any>,
     options: ModelExecutionOptions
   ): Promise<Response> {
-    const querySuffix = action === 'streamGenerateContent' ? 'alt=sse&' : '';
+    const querySuffix = action === 'streamGenerateContent' ? '?alt=sse' : '';
     const endpointPath = `models/${encodeURIComponent(targetModel)}:${action}`;
-    const url = `${this.baseUrl}/${endpointPath}?${querySuffix}key=${encodeURIComponent(this.apiKey!)}`;
+    const url = `${this.baseUrl}/${endpointPath}${querySuffix}`;
     const timeoutMs = options.timeoutMs ?? this.defaultTimeoutMs;
     const maxAttempts = this.maxRetries + 1;
 
@@ -448,6 +456,7 @@ export class GeminiModelProvider implements IModelProvider {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'x-goog-api-key': this.apiKey!,
           },
           body: JSON.stringify(payload),
           signal: attemptCtrl.signal,

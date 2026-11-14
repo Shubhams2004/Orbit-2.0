@@ -191,7 +191,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
                 <div className="flex items-start gap-2.5 min-w-0 flex-1">
                   <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500 dark:text-rose-400 mt-0.5" />
                   <div className="space-y-0.5 min-w-0">
-                    <div className="font-medium leading-relaxed">
+                    <div className="font-medium leading-relaxed whitespace-pre-line break-words">
                       {message.errorMessage || 'Generation failed. Please try again.'}
                     </div>
                     {message.content.trim().length > 0 && (
@@ -201,7 +201,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
                     )}
                   </div>
                 </div>
-                {onRegenerate && (
+                {onRegenerate && message.retryable !== false && (
                   <button
                     type="button"
                     disabled={isBusy}

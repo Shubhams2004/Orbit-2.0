@@ -29,7 +29,7 @@ export const BASELINE_PROVIDERS: ProviderConnection[] = [
     isDefault: false,
     byokSupported: true,
     isConfigured: false,
-    preferredModel: 'gemini-2.5-flash',
+    preferredModel: 'gemini-3-flash-preview',
   },
   {
     id: 'openai',
@@ -73,90 +73,90 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     recommendedUse: 'Daily workspace management, triage, and instant conversational assistance.',
   },
 
-  // 2. Google Gemini Models
+  // 2. Google Gemini Models (Current Official Gemini 3 / 3.1 Family)
   {
-    id: 'gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash',
+    id: 'gemini-3-flash-preview',
+    name: 'Gemini 3 Flash Preview',
     provider: 'Google',
     providerKey: 'gemini',
-    badge: 'Fast Reasoning',
-    description: 'High-speed flagship with adaptive reasoning, multimodal input, and 1M context.',
+    badge: 'Fast Flagship',
+    description: 'Frontier-class Gemini 3 speed and reasoning balance with 1M context and multimodal understanding.',
     contextWindow: '1M',
     contextTokens: 1048576,
-    maxOutputTokens: 8192,
+    maxOutputTokens: 65536,
     category: 'balanced',
     categoryLabel: 'Balanced',
     modalities: ['text', 'image', 'audio', 'video'],
     reasoningCapability: 'advanced',
-    status: 'stable',
+    status: 'preview',
     isAgentCapable: true,
     isDefault: false,
     isConfigured: false,
     availability: 'requires_key',
-    recommendedUse: 'High-throughput reasoning, large documents, audio/video analysis, and everyday coding.',
+    recommendedUse: 'Fast, high-intelligence daily chat, coding assistance, and multimodal analysis.',
   },
   {
-    id: 'gemini-2.5-pro',
-    name: 'Gemini 2.5 Pro',
+    id: 'gemini-3.1-pro-preview',
+    name: 'Gemini 3.1 Pro Preview',
     provider: 'Google',
     providerKey: 'gemini',
-    badge: 'Deep Context',
-    description: 'Deep analytical model with 2M context for complex logic, full-repo analysis, and STEM research.',
-    contextWindow: '2M',
-    contextTokens: 2097152,
-    maxOutputTokens: 8192,
+    badge: 'Deep Reasoning',
+    description: 'Flagship Gemini 3.1 reasoning model for complex software engineering, STEM analysis, and deep thinking with 1M context.',
+    contextWindow: '1M',
+    contextTokens: 1048576,
+    maxOutputTokens: 65536,
     category: 'reasoning',
     categoryLabel: 'Advanced Reasoning',
     modalities: ['text', 'image', 'audio', 'video'],
     reasoningCapability: 'advanced',
-    status: 'stable',
+    status: 'preview',
     isAgentCapable: true,
     isDefault: false,
     isConfigured: false,
     availability: 'requires_key',
-    recommendedUse: 'Complex codebase refactoring, multi-document synthesis, and scientific proofs.',
+    recommendedUse: 'Complex codebase architecture, deep reasoning, multi-document synthesis, and STEM proofs.',
   },
   {
-    id: 'gemini-2.5-flash-lite',
-    name: 'Gemini 2.5 Flash Lite',
+    id: 'gemini-3.1-flash-lite-preview',
+    name: 'Gemini 3.1 Flash-Lite Preview',
     provider: 'Google',
     providerKey: 'gemini',
     badge: 'Ultra Fast',
-    description: 'Lightweight, ultra-low latency model engineered for instant chat and high-volume tasks.',
+    description: 'Ultra-low latency, cost-efficient Gemini 3.1 multimodal model built for rapid responses.',
     contextWindow: '1M',
     contextTokens: 1048576,
-    maxOutputTokens: 4096,
+    maxOutputTokens: 65536,
     category: 'fast',
     categoryLabel: 'Fast',
-    modalities: ['text', 'image'],
+    modalities: ['text', 'image', 'audio', 'video'],
     reasoningCapability: 'standard',
     status: 'preview',
     isAgentCapable: true,
     isDefault: false,
     isConfigured: false,
     availability: 'requires_key',
-    recommendedUse: 'Rapid conversational responses, content summarization, and budget-friendly automation.',
+    recommendedUse: 'Instant replies, lightweight summarization, and high-frequency conversational tasks.',
   },
   {
     id: 'gemini-3.8-flash',
     name: 'Gemini 3.8 Flash',
     provider: 'Google',
     providerKey: 'gemini',
-    badge: 'Next-Gen Preview',
-    description: 'Experimental next-gen architecture preview with enhanced reasoning and multi-sensory comprehension.',
+    badge: 'Coding & Agentic',
+    description: 'High-efficiency Gemini Flash workhorse engineered for long-horizon software engineering and agentic tasks.',
     contextWindow: '1M',
     contextTokens: 1048576,
-    maxOutputTokens: 8192,
-    category: 'specialized',
-    categoryLabel: 'Specialized',
-    modalities: ['text', 'image', 'video'],
+    maxOutputTokens: 65536,
+    category: 'coding',
+    categoryLabel: 'Coding & Agentic',
+    modalities: ['text', 'image', 'audio', 'video'],
     reasoningCapability: 'advanced',
     status: 'preview',
     isAgentCapable: true,
     isDefault: false,
     isConfigured: false,
     availability: 'requires_key',
-    recommendedUse: 'Testing early frontier model capabilities and next-generation reasoning features.',
+    recommendedUse: 'Long-horizon coding workflows, tool-assisted reasoning, and multi-sensory prompts.',
   },
 
   // 3. OpenAI Models
@@ -311,7 +311,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
   },
 ];
 
-const LOCAL_DEPRECATED_MAP: Record<string, { replacementId: string; notice: string }> = {
+export const LOCAL_DEPRECATED_MAP: Record<string, { replacementId: string; notice: string }> = {
   'gpt-3.5-turbo': {
     replacementId: 'gpt-4o-mini',
     notice: 'GPT-3.5 Turbo is retired. Orbit has upgraded to GPT-4o mini.',
@@ -324,15 +324,67 @@ const LOCAL_DEPRECATED_MAP: Record<string, { replacementId: string; notice: stri
     replacementId: 'claude-3-5-haiku',
     notice: 'Claude 2.1 is retired. Upgraded to Claude 3.5 Haiku.',
   },
+  'gemini-2.5-pro': {
+    replacementId: 'gemini-3.1-pro-preview',
+    notice: 'Gemini 2.5 Pro is no longer available to new users. Migrated to Gemini 3.1 Pro Preview.',
+  },
+  'gemini-2.5-flash': {
+    replacementId: 'gemini-3-flash-preview',
+    notice: 'Gemini 2.5 Flash is restricted for new accounts. Migrated to Gemini 3 Flash Preview.',
+  },
+  'gemini-2.5-flash-lite': {
+    replacementId: 'gemini-3.1-flash-lite-preview',
+    notice: 'Gemini 2.5 Flash-Lite is restricted for new accounts. Migrated to Gemini 3.1 Flash-Lite Preview.',
+  },
   'gemini-1.0-pro': {
-    replacementId: 'gemini-2.5-flash',
-    notice: 'Gemini 1.0 Pro is retired. Upgraded to Gemini 2.5 Flash.',
+    replacementId: 'gemini-3.1-pro-preview',
+    notice: 'Gemini 1.0 Pro is retired. Migrated to Gemini 3.1 Pro Preview.',
+  },
+  'gemini-1.5-pro': {
+    replacementId: 'gemini-3.1-pro-preview',
+    notice: 'Gemini 1.5 Pro is retired. Migrated to Gemini 3.1 Pro Preview.',
+  },
+  'gemini-2.0-pro': {
+    replacementId: 'gemini-3.1-pro-preview',
+    notice: 'Gemini 2.0 Pro is retired. Migrated to Gemini 3.1 Pro Preview.',
+  },
+  'gemini-pro': {
+    replacementId: 'gemini-3.1-pro-preview',
+    notice: 'Legacy Gemini Pro is retired. Migrated to Gemini 3.1 Pro Preview.',
   },
   'gemini-1.5-flash': {
-    replacementId: 'gemini-2.5-flash',
-    notice: 'Gemini 1.5 Flash is superseded by Gemini 2.5 Flash.',
+    replacementId: 'gemini-3-flash-preview',
+    notice: 'Gemini 1.5 Flash is retired. Migrated to Gemini 3 Flash Preview.',
+  },
+  'gemini-2.0-flash': {
+    replacementId: 'gemini-3-flash-preview',
+    notice: 'Gemini 2.0 Flash is retired. Migrated to Gemini 3 Flash Preview.',
+  },
+  'gemini-2.0-flash-thinking': {
+    replacementId: 'gemini-3-flash-preview',
+    notice: 'Gemini 2.0 Flash Thinking is retired. Migrated to Gemini 3 Flash Preview.',
   },
 };
+
+export function migrateModelPreference(modelId?: string | null): {
+  modelId: string;
+  migratedFrom?: string;
+  notice?: string;
+} {
+  if (!modelId || !modelId.trim()) {
+    return { modelId: 'orbit-agent-v2' };
+  }
+  const normalized = modelId.trim().replace(/^models\//, '');
+  const entry = LOCAL_DEPRECATED_MAP[normalized];
+  if (entry) {
+    return {
+      modelId: entry.replacementId,
+      migratedFrom: normalized,
+      notice: entry.notice,
+    };
+  }
+  return { modelId: normalized };
+}
 
 export class ModelProviderService implements IModelProviderService {
   private cachedModels: ModelOption[] = [...AVAILABLE_MODELS];
@@ -529,6 +581,16 @@ export class ModelProviderService implements IModelProviderService {
         isDeprecated: false,
         notice: `Model "${modelId}" is not in the active catalog.`,
         replacementId: 'orbit-agent-v2',
+      };
+    }
+
+    if (model.availability === 'unavailable' || model.availability === 'deprecated') {
+      return {
+        isAvailable: false,
+        isDeprecated: true,
+        notice: `${model.name} is unavailable for your connected API key.`,
+        replacementId:
+          model.providerKey === 'gemini' ? 'gemini-3-flash-preview' : 'orbit-agent-v2',
       };
     }
 

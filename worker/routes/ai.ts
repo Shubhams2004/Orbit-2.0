@@ -18,6 +18,7 @@ import {
 import {
   getUnifiedModelCatalog,
   DEPRECATED_MODEL_MAP,
+  resolveActiveModelSelection,
 } from '../services/ai/catalog';
 
 const WORKERS_AI_MODEL = DEFAULT_CLOUDFLARE_MODEL;
@@ -147,12 +148,28 @@ export async function handleAiChat(
     } catch {}
   }
 
-  // Lifecycle check: detect deprecated/retired models and substitute with official active replacement
-  let targetModelId = requestedModel || WORKERS_AI_MODEL;
-  let deprecationNotice: string | undefined = undefined;
-  if (targetModelId && DEPRECATED_MODEL_MAP[targetModelId]) {
-    deprecationNotice = DEPRECATED_MODEL_MAP[targetModelId].notice;
-    targetModelId = DEPRECATED_MODEL_MAP[targetModelId].replacementId;
+  // Lifecycle check: detect deprecated/restricted models and migrate safely to active replacement
+  const modelResolution = resolveActiveModelSelection(requestedModel || WORKERS_AI_MODEL);
+  const targetModelId = modelResolution.modelId;
+  const deprecationNotice = modelResolution.notice;
+
+  if (modelResolution.migratedFrom) {
+    const migrateNow = new Date().toISOString();
+    // Repair stored references in D1 if the migrated model came from saved user or conversation state
+    if (conversationId) {
+      env.DB.prepare(
+        'UPDATE conversations SET model_id = ?, updated_at = ? WHERE id = ? AND user_id = ? AND model_id = ?'
+      )
+        .bind(targetModelId, migrateNow, conversationId, user.id, modelResolution.migratedFrom)
+        .run()
+        .catch(() => {});
+    }
+    env.DB.prepare(
+      'UPDATE users SET default_chat_model = ?, updated_at = ? WHERE id = ? AND default_chat_model = ?'
+    )
+      .bind(targetModelId, migrateNow, user.id, modelResolution.migratedFrom)
+      .run()
+      .catch(() => {});
   }
 
   const resolvedPrimaryProvider = modelRegistry.resolveProvider(targetModelId);
@@ -338,17 +355,21 @@ export async function handleAiChat(
 
   const isExplicitByokModel =
     targetModelId !== WORKERS_AI_MODEL && targetModelId !== 'orbit-agent-v2';
+  const isGeminiTarget =
+    resolvedPrimaryProvider.id === 'gemini' ||
+    targetModelId.toLowerCase().includes('gemini');
 
   // Fallback determination:
-  // 1. If body.allowFallback is boolean, explicitly respect client preference.
-  // 2. If the model is deprecated, permit fallback so user receives response with deprecationNotice.
-  // 3. Otherwise, default to false for BYOK models (prevent silent fallback) and true for default model.
-  const allowFallback =
-    typeof body.allowFallback === 'boolean'
-      ? body.allowFallback
-      : deprecationNotice
-      ? true
-      : !isExplicitByokModel;
+  // 1. NEVER silently route Gemini requests to Llama (even if deprecated model migrated).
+  // 2. If body.allowFallback is boolean for non-Gemini models, respect client preference.
+  // 3. Otherwise default to false for BYOK models and true for Orbit Core default.
+  const allowFallback = isGeminiTarget
+    ? false
+    : typeof body.allowFallback === 'boolean'
+    ? body.allowFallback
+    : deprecationNotice
+    ? true
+    : !isExplicitByokModel;
 
   const webSearchPayload = {
     triggered: requiresSearch,
@@ -880,6 +901,9 @@ export async function handleGetAiPreferences(
   user: AuthenticatedUser
 ): Promise<Response> {
   let defaultModel = WORKERS_AI_MODEL;
+  let migratedFrom: string | undefined;
+  let migrationNotice: string | undefined;
+
   try {
     await env.DB.prepare('ALTER TABLE users ADD COLUMN default_chat_model TEXT').run();
   } catch {}
@@ -891,7 +915,18 @@ export async function handleGetAiPreferences(
       .bind(user.id)
       .first<{ default_chat_model?: string }>();
     if (userRow?.default_chat_model) {
-      defaultModel = userRow.default_chat_model;
+      const resolved = resolveActiveModelSelection(userRow.default_chat_model);
+      defaultModel = resolved.modelId;
+      if (resolved.migratedFrom) {
+        migratedFrom = resolved.migratedFrom;
+        migrationNotice = resolved.notice;
+        await env.DB.prepare(
+          'UPDATE users SET default_chat_model = ?, updated_at = ? WHERE id = ?'
+        )
+          .bind(defaultModel, new Date().toISOString(), user.id)
+          .run()
+          .catch(() => {});
+      }
     }
   } catch {}
 
@@ -905,12 +940,21 @@ export async function handleGetAiPreferences(
 
     for (const c of credRows.results || []) {
       if (c.preferred_model) {
-        providerPreferences[c.provider] = c.preferred_model;
+        const resolved = resolveActiveModelSelection(c.preferred_model);
+        providerPreferences[c.provider] = resolved.modelId;
+        if (resolved.migratedFrom) {
+          await env.DB.prepare(
+            'UPDATE user_ai_credentials SET preferred_model = ?, updated_at = ? WHERE user_id = ? AND provider = ?'
+          )
+            .bind(resolved.modelId, new Date().toISOString(), user.id, c.provider)
+            .run()
+            .catch(() => {});
+        }
       }
     }
   } catch {}
 
-  return jsonResponse({ defaultModel, providerPreferences }, 200);
+  return jsonResponse({ defaultModel, providerPreferences, migratedFrom, migrationNotice }, 200);
 }
 
 /**
@@ -929,16 +973,19 @@ export async function handleUpdateAiPreferences(
     return errorResponse('INVALID_JSON', 'Malformed JSON in request body.', 400);
   }
 
-  const defaultModel =
+  const rawDefaultModel =
     typeof body.defaultModel === 'string' && body.defaultModel.trim()
       ? body.defaultModel.trim()
       : typeof body.modelId === 'string' && body.modelId.trim()
       ? body.modelId.trim()
       : undefined;
 
-  if (!defaultModel) {
+  if (!rawDefaultModel) {
     return errorResponse('VALIDATION_ERROR', 'Field "defaultModel" is required.', 400);
   }
+
+  const resolved = resolveActiveModelSelection(rawDefaultModel);
+  const defaultModel = resolved.modelId;
 
   try {
     await env.DB.prepare('ALTER TABLE users ADD COLUMN default_chat_model TEXT').run();
@@ -959,7 +1006,15 @@ export async function handleUpdateAiPreferences(
     console.error('[AI Preferences] Failed to update user preference:', err);
   }
 
-  return jsonResponse({ success: true, defaultModel }, 200);
+  return jsonResponse(
+    {
+      success: true,
+      defaultModel,
+      migratedFrom: resolved.migratedFrom,
+      migrationNotice: resolved.notice,
+    },
+    200
+  );
 }
 
 

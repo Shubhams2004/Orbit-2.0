@@ -38,12 +38,14 @@ export const ByokConnectModal: React.FC<ByokConnectModalProps> = ({
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>('');
+  const [availableModels, setAvailableModels] = useState<ModelOption[]>(AVAILABLE_MODELS);
   const [providers, setProviders] = useState<ProviderConnection[]>([]);
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isUpdatingKey, setIsUpdatingKey] = useState(false);
+  const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
 
   // Sync initial provider when modal opens
   useEffect(() => {
@@ -56,14 +58,21 @@ export const ByokConnectModal: React.FC<ByokConnectModalProps> = ({
       setSuccessMsg(null);
       setApiKey('');
       setIsUpdatingKey(false);
+      setConfirmingDisconnect(false);
     }
   }, [isOpen, initialProvider]);
 
   const loadProviders = async () => {
     setIsLoadingProviders(true);
     try {
-      const list = await modelProviderService.getProviders();
+      const [list, loadedModels] = await Promise.all([
+        modelProviderService.getProviders(),
+        modelProviderService.getAvailableModels(),
+      ]);
       setProviders(list);
+      if (Array.isArray(loadedModels) && loadedModels.length > 0) {
+        setAvailableModels(loadedModels);
+      }
 
       // Set default selected model based on current provider
       const currentProviderInfo = list.find((p) => p.id === selectedProvider);
@@ -80,7 +89,10 @@ export const ByokConnectModal: React.FC<ByokConnectModalProps> = ({
   const activeProviderInfo = providers.find((p) => p.id === selectedProvider);
   const isAlreadyConnected = Boolean(activeProviderInfo?.isConfigured && activeProviderInfo.keyHint);
 
-  const providerModels = AVAILABLE_MODELS.filter((m) => {
+  const providerModels = availableModels.filter((m) => {
+    if (m.availability === 'unavailable' || m.availability === 'deprecated') {
+      return false;
+    }
     if (selectedProvider === 'gemini') return m.providerKey === 'gemini';
     if (selectedProvider === 'openai') return m.providerKey === 'openai';
     if (selectedProvider === 'anthropic') return m.providerKey === 'anthropic';
@@ -90,9 +102,11 @@ export const ByokConnectModal: React.FC<ByokConnectModalProps> = ({
   // Keep selectedModel valid for provider
   useEffect(() => {
     if (providerModels.length > 0 && !providerModels.some((m) => m.id === selectedModel)) {
-      setSelectedModel(providerModels[0].id);
+      const preferred = activeProviderInfo?.preferredModel;
+      const validPreferred = preferred && providerModels.some((m) => m.id === preferred);
+      setSelectedModel(validPreferred ? preferred : providerModels[0].id);
     }
-  }, [selectedProvider, providerModels]);
+  }, [selectedProvider, providerModels, activeProviderInfo, selectedModel]);
 
   if (!isOpen) return null;
 
@@ -135,19 +149,21 @@ export const ByokConnectModal: React.FC<ByokConnectModalProps> = ({
   };
 
   const handleDisconnect = async () => {
-    if (!confirm(`Are you sure you want to disconnect ${activeProviderInfo?.name || selectedProvider}? Your stored encrypted key will be removed.`)) {
+    if (!confirmingDisconnect) {
+      setConfirmingDisconnect(true);
       return;
     }
 
     setIsSubmitting(true);
     setErrorMsg(null);
+    setConfirmingDisconnect(false);
     try {
       await modelProviderService.disconnectProvider(selectedProvider);
       setSuccessMsg('Provider disconnected successfully.');
       await loadProviders();
 
       // If currently selected model belonged to this provider, switch back to Cloudflare Workers AI
-      const currentModelObj = AVAILABLE_MODELS.find((m) => m.id === currentModelId);
+      const currentModelObj = availableModels.find((m) => m.id === currentModelId);
       if (currentModelObj?.providerKey === selectedProvider) {
         onSelectModel('orbit-agent-v2');
       }
@@ -241,6 +257,7 @@ export const ByokConnectModal: React.FC<ByokConnectModalProps> = ({
                       setErrorMsg(null);
                       setSuccessMsg(null);
                       setIsUpdatingKey(false);
+                      setConfirmingDisconnect(false);
                       setApiKey('');
                     }}
                     className={`p-3 rounded-2xl border text-left transition-colors duration-150 flex flex-col justify-between gap-1.5 cursor-pointer ${
@@ -286,23 +303,48 @@ export const ByokConnectModal: React.FC<ByokConnectModalProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setIsUpdatingKey(true)}
-                    className="min-h-[32px] px-2.5 py-1 rounded-lg bg-white dark:bg-neutral-800 text-slate-700 dark:text-neutral-200 border border-slate-200 dark:border-neutral-700 hover:bg-slate-100 transition-colors duration-150 cursor-pointer"
-                  >
-                    Update Key
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDisconnect}
-                    disabled={isSubmitting}
-                    className="min-h-[32px] px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/30 dark:hover:bg-rose-900/40 dark:text-rose-300 border border-rose-200 dark:border-rose-900/50 transition-colors duration-150 flex items-center gap-1 cursor-pointer"
-                    title="Disconnect key"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Disconnect</span>
-                  </button>
+                  {!confirmingDisconnect && (
+                    <button
+                      type="button"
+                      onClick={() => setIsUpdatingKey(true)}
+                      className="min-h-[32px] px-2.5 py-1 rounded-lg bg-white dark:bg-neutral-800 text-slate-700 dark:text-neutral-200 border border-slate-200 dark:border-neutral-700 hover:bg-slate-100 transition-colors duration-150 cursor-pointer"
+                    >
+                      Update Key
+                    </button>
+                  )}
+                  {confirmingDisconnect ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingDisconnect(false)}
+                        disabled={isSubmitting}
+                        className="min-h-[32px] px-2.5 py-1 rounded-lg bg-white dark:bg-neutral-800 text-slate-600 dark:text-neutral-300 border border-slate-200 dark:border-neutral-700 hover:bg-slate-100 transition-colors duration-150 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDisconnect}
+                        disabled={isSubmitting}
+                        className="min-h-[32px] px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white border border-rose-600 transition-colors duration-150 flex items-center gap-1 cursor-pointer"
+                        title="Confirm disconnect key"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Confirm Disconnect</span>
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleDisconnect}
+                      disabled={isSubmitting}
+                      className="min-h-[32px] px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/30 dark:hover:bg-rose-900/40 dark:text-rose-300 border border-rose-200 dark:border-rose-900/50 transition-colors duration-150 flex items-center gap-1 cursor-pointer"
+                      title="Disconnect key"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Disconnect</span>
+                    </button>
+                  )}
                 </div>
               </div>
 

@@ -135,6 +135,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   // Filtered models based on search query, category, and configured status
   const filteredModels = useMemo(() => {
     return models.filter((model) => {
+      // Exclude deprecated or unavailable models from normal selection
+      if (model.availability === 'unavailable' || model.availability === 'deprecated') {
+        return false;
+      }
+
       // Category filter
       if (selectedCategory !== 'all') {
         if (selectedCategory === 'coding') {
@@ -322,7 +327,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 filteredModels.map((model) => {
                   const isSelected = model.id === currentModelId;
                   const isBuiltIn = model.providerKey === 'cloudflare' || model.isDefault;
-                  const isConfigured = Boolean(isBuiltIn || model.isConfigured);
+                  const isConfigured = Boolean(
+                    isBuiltIn || (model.isConfigured && model.availability !== 'unavailable')
+                  );
                   const isPreview = model.status === 'preview';
 
                   return (

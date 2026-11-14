@@ -258,13 +258,18 @@ export class MockChatService implements IChatService {
       const partialText = typeof details.partialText === 'string' ? details.partialText : undefined;
       const conversationId =
         typeof details.conversationId === 'string' ? details.conversationId : undefined;
-      const raw = err.message || '';
+      const raw = (err.message || '').trim();
+      const cleanRaw = raw.replace(/^(Gemini|OpenAI|Anthropic) provider error:\s*/i, '').trim();
       const lower = raw.toLowerCase();
+      const isGeminiError = provider === 'gemini' || modelId.toLowerCase().includes('gemini');
 
       if (err.code === 'GATEWAY_TIMEOUT' || err.code === 'UPSTREAM_TIMEOUT' || err.code === 'REQUEST_TIMEOUT' || err.status === 524 || err.status === 504 || lower.includes('524')) {
+        const actualDetail = cleanRaw || `The AI provider timed out while waiting for "${modelId}".`;
+        const recovery = isGeminiError
+          ? 'Click Retry to try again, or switch to a faster model such as Gemini 3 Flash Preview or Gemini 3.1 Flash-Lite Preview.'
+          : 'Click Retry to try again, or switch to a faster model.';
         return {
-          message:
-            'The AI provider timed out while waiting for a response. This can happen during high load or complex prompts — click Retry to try again, or switch to a faster model.',
+          message: `${actualDetail}\n${recovery}`,
           code: err.code,
           status: err.status || 504,
           retryable: true,
@@ -275,9 +280,12 @@ export class MockChatService implements IChatService {
       }
 
       if (err.code === 'QUOTA_EXHAUSTED' || err.status === 429) {
+        const actualDetail = cleanRaw || 'Rate limit or API quota exceeded for your connected provider.';
+        const recovery = isGeminiError
+          ? 'Wait a brief moment and click Retry, switch to Gemini 3 Flash Preview or Gemini 3.1 Flash-Lite Preview, or check your Google AI Studio quota/billing tier.'
+          : 'Wait a brief moment and click Retry, or verify your provider billing/quota.';
         return {
-          message:
-            'Rate limit or API quota reached for your connected provider. Wait a brief moment and click Retry, or verify your provider billing/quota.',
+          message: `${actualDetail}\n${recovery}`,
           code: err.code,
           status: 429,
           retryable: true,
@@ -287,11 +295,27 @@ export class MockChatService implements IChatService {
         };
       }
 
-      if (err.code === 'AUTHENTICATION_FAILED' || err.status === 401 || err.status === 403) {
+      if (err.code === 'PROVIDER_NOT_CONFIGURED' || err.status === 503) {
+        const actualDetail = cleanRaw || `The selected model "${modelId}" requires a connected provider API key.`;
+        const recovery =
+          'Connect your API key in the model selector above ("Connect Key"), or switch back to Orbit Core (Default).';
         return {
-          message: raw.includes('API key')
-            ? raw.replace(/^Gemini provider error:\s*/i, '')
-            : 'Authentication failed for the selected AI provider. Please verify your API key in the model selector.',
+          message: `${actualDetail}\n${recovery}`,
+          code: err.code,
+          status: 503,
+          retryable: false,
+          provider,
+          partialText,
+          conversationId,
+        };
+      }
+
+      if (err.code === 'AUTHENTICATION_FAILED' || err.status === 401 || err.status === 403) {
+        const actualDetail = cleanRaw || 'Authentication failed for the selected AI provider.';
+        const recovery =
+          'Open the model selector above and verify or reconnect your API key in "Connect your AI provider (BYOK)".';
+        return {
+          message: `${actualDetail}\n${recovery}`,
           code: err.code,
           status: err.status || 401,
           retryable: false,
@@ -302,8 +326,14 @@ export class MockChatService implements IChatService {
       }
 
       if (err.code === 'MODEL_NOT_FOUND' || err.status === 404) {
+        const actualDetail =
+          cleanRaw ||
+          `The selected model ("${modelId}") is unsupported or unavailable for your API key.`;
+        const recovery = isGeminiError
+          ? 'Open the model selector above and switch to Gemini 3.1 Pro Preview (reasoning) or Gemini 3 Flash Preview / Gemini 3.1 Flash-Lite Preview (faster responses).'
+          : 'Open the model selector above and choose an available model.';
         return {
-          message: `The selected model ("${modelId}") is unsupported or unavailable for your API key. Please select another model.`,
+          message: `${actualDetail}\n${recovery}`,
           code: err.code,
           status: 404,
           retryable: false,
@@ -314,10 +344,11 @@ export class MockChatService implements IChatService {
       }
 
       if (err.code === 'STREAM_INTERRUPTED') {
+        const detail = cleanRaw ? ` (${cleanRaw})` : '';
         return {
           message: partialText
-            ? 'The response stream was interrupted before completion. Your partial response was preserved above — click Retry to try again.'
-            : 'The streaming connection was interrupted. Please click Retry to try again.',
+            ? `The response stream was interrupted before completion${detail}. Your partial response was preserved above — click Retry to try again.`
+            : `The streaming connection was interrupted${detail}. Please click Retry to try again.`,
           code: err.code,
           status: err.status || 502,
           retryable: true,
@@ -328,7 +359,7 @@ export class MockChatService implements IChatService {
       }
 
       return {
-        message: raw.replace(/^(Gemini|OpenAI|Anthropic) provider error:\s*/i, '') || 'The AI provider could not complete this request.',
+        message: cleanRaw || 'The AI provider could not complete this request.',
         code: err.code,
         status: err.status || 500,
         retryable: Boolean(details.retryable ?? (err.status >= 500 || err.status === 0)),

@@ -31,6 +31,7 @@ import {
   isDemoConversationId,
 } from '../services/conversationService';
 import { chatService } from '../services/chatService';
+import { migrateModelPreference } from '../services/modelProviderService';
 import { taskService, MockTaskService } from '../services/taskService';
 import { projectService, MockProjectService } from '../services/projectService';
 import { apiClient, ApiError, isProductionEnv } from '../services/apiClient';
@@ -445,7 +446,13 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [selectedModelId, setSelectedModelIdState] = useState<string>(() => {
     try {
       const stored = localStorage.getItem('orbit_active_model_preference');
-      if (stored && stored.trim()) return stored.trim();
+      if (stored && stored.trim()) {
+        const migrated = migrateModelPreference(stored.trim());
+        if (migrated.migratedFrom) {
+          localStorage.setItem('orbit_active_model_preference', migrated.modelId);
+        }
+        return migrated.modelId;
+      }
     } catch {}
     return 'orbit-agent-v2';
   });
@@ -567,19 +574,31 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
 
           const storedUserPref = localStorage.getItem(`orbit_model_pref_${fbUser.uid}`);
           if (storedUserPref && storedUserPref.trim()) {
-            setSelectedModelIdState(storedUserPref.trim());
-            localStorage.setItem('orbit_active_model_preference', storedUserPref.trim());
+            const migrated = migrateModelPreference(storedUserPref.trim());
+            setSelectedModelIdState(migrated.modelId);
+            localStorage.setItem('orbit_active_model_preference', migrated.modelId);
+            if (migrated.migratedFrom) {
+              localStorage.setItem(`orbit_model_pref_${fbUser.uid}`, migrated.modelId);
+              apiClient.put('/api/v1/ai/preferences', { defaultModel: migrated.modelId }).catch(() => {});
+            }
           } else if (userSettings.defaultChatModel && userSettings.defaultChatModel.trim()) {
-            setSelectedModelIdState(userSettings.defaultChatModel.trim());
+            const migrated = migrateModelPreference(userSettings.defaultChatModel.trim());
+            setSelectedModelIdState(migrated.modelId);
+            localStorage.setItem('orbit_active_model_preference', migrated.modelId);
+            if (migrated.migratedFrom) {
+              localStorage.setItem(`orbit_model_pref_${fbUser.uid}`, migrated.modelId);
+              apiClient.put('/api/v1/ai/preferences', { defaultModel: migrated.modelId }).catch(() => {});
+            }
           } else {
             // Restore from server user preferences
             apiClient
               .get<{ defaultModel?: string }>('/api/v1/ai/preferences')
               .then((res) => {
                 if (res?.defaultModel && res.defaultModel.trim()) {
-                  setSelectedModelIdState(res.defaultModel.trim());
-                  localStorage.setItem(`orbit_model_pref_${fbUser.uid}`, res.defaultModel.trim());
-                  localStorage.setItem('orbit_active_model_preference', res.defaultModel.trim());
+                  const migrated = migrateModelPreference(res.defaultModel.trim());
+                  setSelectedModelIdState(migrated.modelId);
+                  localStorage.setItem(`orbit_model_pref_${fbUser.uid}`, migrated.modelId);
+                  localStorage.setItem('orbit_active_model_preference', migrated.modelId);
                 }
               })
               .catch(() => {});
@@ -625,7 +644,8 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     const conv = conversations.find((c) => c.id === activeConversationId);
     if (conv && conv.modelId && conv.modelId.trim() && conv.modelId !== 'orbit-agent-v2') {
-      setSelectedModelIdState(conv.modelId.trim());
+      const migrated = migrateModelPreference(conv.modelId.trim());
+      setSelectedModelIdState(migrated.modelId);
     }
 
     if (isSendingRef.current || activeConversationId === lastLoadedConvIdRef.current) {

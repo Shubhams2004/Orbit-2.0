@@ -3,7 +3,7 @@
  *
  * Provides a unified, up-to-date catalog of AI models across:
  * - Orbit Core (Cloudflare Workers AI - Llama 3.1 8B Instruct Fast)
- * - Google Gemini (Gemini 2.5 Flash, Gemini 2.5 Pro, Gemini 2.5 Flash Lite, Gemini 3.8 Flash preview)
+ * - Google Gemini (Gemini 3.1 Pro Preview, Gemini 3 Flash Preview, Gemini 3.1 Flash-Lite Preview, Gemini 3.8 Flash)
  * - OpenAI (GPT-4o, GPT-4o mini, o3-mini, o1)
  * - Anthropic (Claude 3.7 Sonnet, Claude 3.5 Sonnet, Claude 3.5 Haiku)
  *
@@ -13,7 +13,7 @@
  * 3. Categorization into Fast, Balanced, Advanced Reasoning, Coding & Agentic, Specialized.
  * 4. Dynamic discovery verifying accessible models via official provider APIs when BYOK key is provided.
  * 5. Resilient fallback to curated catalog when live discovery is unconfigured or unavailable.
- * 6. Deprecated model detection and lifecycle metadata.
+ * 6. Deprecated/restricted model detection, safe migration helpers, and lifecycle metadata.
  */
 
 import type { Env } from '../../types';
@@ -30,7 +30,7 @@ export interface ModelMetadata {
   category: ModelCategory;
   categoryLabel: string;
   description: string;
-  contextWindow: string; // Human-readable e.g. "128k", "200k", "1M", "2M"
+  contextWindow: string; // Human-readable e.g. "128k", "200k", "1M"
   contextTokens: number;
   maxOutputTokens: number;
   modalities: Array<'text' | 'image' | 'audio' | 'video'>;
@@ -47,7 +47,11 @@ export interface ModelMetadata {
 /**
  * Curated official fallback catalog.
  * Verified against official documentation:
- * - Google DeepMind / AI Studio (Gemini 2.5 series, Gemini 3.8 Flash preview)
+ * - Google AI Studio / Gemini API (https://ai.google.dev/gemini-api/docs/models)
+ *   - gemini-3.1-pro-preview (1M input / 65,536 output)
+ *   - gemini-3-flash-preview (1M input / 65,536 output)
+ *   - gemini-3.1-flash-lite-preview (1M input / 65,536 output)
+ *   - gemini-3.8-flash (1M input / 65,536 output)
  * - OpenAI API docs (GPT-4o, GPT-4o mini, o3-mini, o1)
  * - Anthropic API docs (Claude 3.7 Sonnet, Claude 3.5 Sonnet, Claude 3.5 Haiku)
  * - Cloudflare Workers AI (Llama 3.1 8B Instruct Fast)
@@ -74,78 +78,78 @@ export const OFFICIAL_MODEL_CATALOG: ModelMetadata[] = [
     recommendedUse: 'Daily workspace management, triage, and instant conversational assistance.',
   },
 
-  // 2. Google Gemini Models
+  // 2. Google Gemini Models (Current Official Gemini 3 / 3.1 Family)
   {
-    id: 'gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash',
+    id: 'gemini-3-flash-preview',
+    name: 'Gemini 3 Flash Preview',
     provider: 'gemini',
     providerName: 'Google Gemini',
     category: 'balanced',
     categoryLabel: 'Balanced',
-    description: 'High-speed flagship with adaptive reasoning, multimodal input, and 1M context.',
+    description: 'Frontier-class Gemini 3 speed and reasoning balance with 1M context and multimodal understanding.',
     contextWindow: '1M',
     contextTokens: 1048576,
-    maxOutputTokens: 8192,
+    maxOutputTokens: 65536,
     modalities: ['text', 'image', 'audio', 'video'],
     reasoningCapability: 'advanced',
-    status: 'stable',
+    status: 'preview',
     isDefault: false,
     availability: 'requires_key',
-    recommendedUse: 'High-throughput reasoning, large documents, audio/video analysis, and everyday coding.',
+    recommendedUse: 'Fast, high-intelligence daily chat, coding assistance, and multimodal analysis.',
   },
   {
-    id: 'gemini-2.5-pro',
-    name: 'Gemini 2.5 Pro',
+    id: 'gemini-3.1-pro-preview',
+    name: 'Gemini 3.1 Pro Preview',
     provider: 'gemini',
     providerName: 'Google Gemini',
     category: 'reasoning',
     categoryLabel: 'Advanced Reasoning',
-    description: 'Deep analytical model with 2M context for complex logic, full-repo analysis, and STEM research.',
-    contextWindow: '2M',
-    contextTokens: 2097152,
-    maxOutputTokens: 8192,
+    description: 'Flagship Gemini 3.1 reasoning model for complex software engineering, STEM analysis, and deep thinking with 1M context.',
+    contextWindow: '1M',
+    contextTokens: 1048576,
+    maxOutputTokens: 65536,
     modalities: ['text', 'image', 'audio', 'video'],
     reasoningCapability: 'advanced',
-    status: 'stable',
+    status: 'preview',
     isDefault: false,
     availability: 'requires_key',
-    recommendedUse: 'Complex codebase refactoring, multi-document synthesis, and scientific proofs.',
+    recommendedUse: 'Complex codebase architecture, deep reasoning, multi-document synthesis, and STEM proofs.',
   },
   {
-    id: 'gemini-2.5-flash-lite',
-    name: 'Gemini 2.5 Flash Lite',
+    id: 'gemini-3.1-flash-lite-preview',
+    name: 'Gemini 3.1 Flash-Lite Preview',
     provider: 'gemini',
     providerName: 'Google Gemini',
     category: 'fast',
     categoryLabel: 'Fast',
-    description: 'Lightweight, ultra-low latency model engineered for instant chat and high-volume tasks.',
+    description: 'Ultra-low latency, cost-efficient Gemini 3.1 multimodal model built for rapid responses.',
     contextWindow: '1M',
     contextTokens: 1048576,
-    maxOutputTokens: 4096,
-    modalities: ['text', 'image'],
+    maxOutputTokens: 65536,
+    modalities: ['text', 'image', 'audio', 'video'],
     reasoningCapability: 'standard',
     status: 'preview',
     isDefault: false,
     availability: 'requires_key',
-    recommendedUse: 'Rapid conversational responses, content summarization, and budget-friendly automation.',
+    recommendedUse: 'Instant replies, lightweight summarization, and high-frequency conversational tasks.',
   },
   {
     id: 'gemini-3.8-flash',
-    name: 'Gemini 3.8 Flash (Preview)',
+    name: 'Gemini 3.8 Flash',
     provider: 'gemini',
     providerName: 'Google Gemini',
-    category: 'specialized',
-    categoryLabel: 'Specialized',
-    description: 'Experimental next-gen architecture preview with enhanced reasoning and multi-sensory comprehension.',
+    category: 'coding',
+    categoryLabel: 'Coding & Agentic',
+    description: 'High-efficiency Gemini Flash workhorse engineered for long-horizon software engineering and agentic tasks.',
     contextWindow: '1M',
     contextTokens: 1048576,
-    maxOutputTokens: 8192,
-    modalities: ['text', 'image', 'video'],
+    maxOutputTokens: 65536,
+    modalities: ['text', 'image', 'audio', 'video'],
     reasoningCapability: 'advanced',
     status: 'preview',
     isDefault: false,
     availability: 'requires_key',
-    recommendedUse: 'Testing early frontier model capabilities and next-generation reasoning features.',
+    recommendedUse: 'Long-horizon coding workflows, tool-assisted reasoning, and multi-sensory prompts.',
   },
 
   // 3. OpenAI Models
@@ -280,7 +284,7 @@ export const OFFICIAL_MODEL_CATALOG: ModelMetadata[] = [
 ];
 
 /**
- * Known deprecated or retired model identifiers mapped to active replacements.
+ * Known deprecated, retired, or new-user-restricted model identifiers mapped to active replacements.
  */
 export const DEPRECATED_MODEL_MAP: Record<string, { replacementId: string; notice: string }> = {
   'gpt-3.5-turbo': {
@@ -299,28 +303,87 @@ export const DEPRECATED_MODEL_MAP: Record<string, { replacementId: string; notic
     replacementId: 'claude-3-7-sonnet',
     notice: 'Claude 3 Opus is superseded by Claude 3.7 Sonnet with hybrid reasoning.',
   },
+  'gemini-2.5-pro': {
+    replacementId: 'gemini-3.1-pro-preview',
+    notice: 'Gemini 2.5 Pro is no longer available to new users. Migrated to Gemini 3.1 Pro Preview.',
+  },
+  'gemini-2.5-flash': {
+    replacementId: 'gemini-3-flash-preview',
+    notice: 'Gemini 2.5 Flash is restricted for new accounts. Migrated to Gemini 3 Flash Preview.',
+  },
+  'gemini-2.5-flash-lite': {
+    replacementId: 'gemini-3.1-flash-lite-preview',
+    notice: 'Gemini 2.5 Flash-Lite is restricted for new accounts. Migrated to Gemini 3.1 Flash-Lite Preview.',
+  },
   'gemini-1.0-pro': {
-    replacementId: 'gemini-2.5-flash',
-    notice: 'Gemini 1.0 Pro is retired. Upgraded to Gemini 2.5 Flash with 1M context.',
+    replacementId: 'gemini-3.1-pro-preview',
+    notice: 'Gemini 1.0 Pro is retired. Migrated to Gemini 3.1 Pro Preview.',
+  },
+  'gemini-1.5-pro': {
+    replacementId: 'gemini-3.1-pro-preview',
+    notice: 'Gemini 1.5 Pro is retired. Migrated to Gemini 3.1 Pro Preview.',
+  },
+  'gemini-2.0-pro': {
+    replacementId: 'gemini-3.1-pro-preview',
+    notice: 'Gemini 2.0 Pro is retired. Migrated to Gemini 3.1 Pro Preview.',
+  },
+  'gemini-pro': {
+    replacementId: 'gemini-3.1-pro-preview',
+    notice: 'Legacy Gemini Pro is retired. Migrated to Gemini 3.1 Pro Preview.',
   },
   'gemini-1.5-flash': {
-    replacementId: 'gemini-2.5-flash',
-    notice: 'Gemini 1.5 Flash is superseded by Gemini 2.5 Flash.',
+    replacementId: 'gemini-3-flash-preview',
+    notice: 'Gemini 1.5 Flash is retired. Migrated to Gemini 3 Flash Preview.',
+  },
+  'gemini-2.0-flash': {
+    replacementId: 'gemini-3-flash-preview',
+    notice: 'Gemini 2.0 Flash is retired. Migrated to Gemini 3 Flash Preview.',
+  },
+  'gemini-2.0-flash-thinking': {
+    replacementId: 'gemini-3-flash-preview',
+    notice: 'Gemini 2.0 Flash Thinking is retired. Migrated to Gemini 3 Flash Preview.',
   },
 };
 
 /**
+ * Safely migrates a saved model ID if it references a retired or restricted model.
+ * Valid active model selections are returned completely unchanged.
+ */
+export function resolveActiveModelSelection(modelId?: string | null): {
+  modelId: string;
+  migratedFrom?: string;
+  notice?: string;
+} {
+  if (!modelId || !modelId.trim()) {
+    return { modelId: 'orbit-agent-v2' };
+  }
+  const normalized = modelId.trim().replace(/^models\//, '');
+  const entry = DEPRECATED_MODEL_MAP[normalized];
+  if (entry) {
+    return {
+      modelId: entry.replacementId,
+      migratedFrom: normalized,
+      notice: entry.notice,
+    };
+  }
+  return { modelId: normalized };
+}
+
+/**
  * Dynamic discovery helper for Google Gemini models via official API.
- * GET https://generativelanguage.googleapis.com/v1beta/models?key=KEY
+ * GET https://generativelanguage.googleapis.com/v1beta/models with x-goog-api-key header.
  */
 export async function discoverGeminiModels(apiKey: string, timeoutMs = 3500): Promise<string[]> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`, {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
       method: 'GET',
-      headers: { 'Accept': 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        'x-goog-api-key': apiKey,
+      },
       signal: controller.signal,
     });
     clearTimeout(timer);
@@ -330,11 +393,11 @@ export async function discoverGeminiModels(apiKey: string, timeoutMs = 3500): Pr
     const data: any = await res.json();
     if (!data || !Array.isArray(data.models)) return [];
 
-    // Filter only models supporting generateContent and normalize name (remove 'models/' prefix)
+    // Filter only non-deprecated models supporting generateContent and normalize name (remove 'models/' prefix)
     return data.models
       .filter((m: any) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
       .map((m: any) => (m.name || '').replace(/^models\//, ''))
-      .filter((id: string) => id.startsWith('gemini-'));
+      .filter((id: string) => id.startsWith('gemini-') && !DEPRECATED_MODEL_MAP[id]);
   } catch {
     return [];
   }

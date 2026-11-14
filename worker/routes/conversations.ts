@@ -1,5 +1,6 @@
 import { Env, AuthenticatedUser } from '../types';
 import { jsonResponse, errorResponse } from '../utils/response';
+import { resolveActiveModelSelection } from '../services/ai/catalog';
 
 interface ConversationRow {
   id: string;
@@ -51,15 +52,28 @@ export async function handleGetConversations(
   `;
 
   const result = await env.DB.prepare(query).bind(user.id).all<ConversationRow>();
-  const conversations = (result.results || []).map((row: ConversationRow) => ({
-    id: row.id,
-    userId: row.user_id,
-    title: row.title,
-    modelId: row.model_id || 'orbit-agent-v2',
-    messageCount: row.message_count || 0,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }));
+  const conversations = await Promise.all(
+    (result.results || []).map(async (row: ConversationRow) => {
+      const resolved = resolveActiveModelSelection(row.model_id || 'orbit-agent-v2');
+      if (resolved.migratedFrom) {
+        await env.DB.prepare(
+          'UPDATE conversations SET model_id = ? WHERE id = ? AND user_id = ?'
+        )
+          .bind(resolved.modelId, row.id, user.id)
+          .run()
+          .catch(() => {});
+      }
+      return {
+        id: row.id,
+        userId: row.user_id,
+        title: row.title,
+        modelId: resolved.modelId,
+        messageCount: row.message_count || 0,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+    })
+  );
 
   return jsonResponse(conversations, 200, { total: conversations.length });
 }
@@ -81,12 +95,14 @@ export async function handleCreateConversation(
       ? body.title.trim()
       : 'New Conversation';
 
-  const modelId =
+  const rawModelId =
     body.modelId && typeof body.modelId === 'string' && body.modelId.trim()
       ? body.modelId.trim()
       : body.model && typeof body.model === 'string' && body.model.trim()
       ? body.model.trim()
       : 'orbit-agent-v2';
+
+  const modelId = resolveActiveModelSelection(rawModelId).modelId;
 
   const id = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   const now = new Date().toISOString();
@@ -136,10 +152,10 @@ export async function handlePatchConversation(
 
   if (body.modelId && typeof body.modelId === 'string' && body.modelId.trim()) {
     updates.push('model_id = ?');
-    bindings.push(body.modelId.trim());
+    bindings.push(resolveActiveModelSelection(body.modelId.trim()).modelId);
   } else if (body.model && typeof body.model === 'string' && body.model.trim()) {
     updates.push('model_id = ?');
-    bindings.push(body.model.trim());
+    bindings.push(resolveActiveModelSelection(body.model.trim()).modelId);
   }
 
   if (updates.length === 0) {

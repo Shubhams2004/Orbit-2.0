@@ -28,7 +28,9 @@ import {
   discoverAnthropicModels,
   DEPRECATED_MODEL_MAP,
   OFFICIAL_MODEL_CATALOG,
+  resolveActiveModelSelection,
 } from '../worker/services/ai/catalog';
+import { migrateModelPreference } from '../src/services/modelProviderService';
 
 async function signRs256Jwt(
   header: Record<string, unknown>,
@@ -1689,7 +1691,8 @@ async function runTests() {
   assert(unitRegistry.resolveProvider('@cf/meta/llama-3.1-8b-instruct-fast').id === 'cloudflare', '@cf/ resolves to Cloudflare');
   assert(unitRegistry.resolveProvider('gpt-4o').id === 'openai', 'gpt-4o resolves to OpenAI');
   assert(unitRegistry.resolveProvider('o3-mini').id === 'openai', 'o3-mini resolves to OpenAI');
-  assert(unitRegistry.resolveProvider('gemini-2.5-flash').id === 'gemini', 'gemini-2.5-flash resolves to Gemini');
+  assert(unitRegistry.resolveProvider('gemini-3-flash-preview').id === 'gemini', 'gemini-3-flash-preview resolves to Gemini');
+  assert(unitRegistry.resolveProvider('gemini-3.1-pro-preview').id === 'gemini', 'gemini-3.1-pro-preview resolves to Gemini');
   assert(unitRegistry.resolveProvider('claude-3-7-sonnet').id === 'anthropic', 'claude-3-7-sonnet resolves to Anthropic');
   assert(unitRegistry.resolveProvider('unknown-future-model').id === 'cloudflare', 'Unknown model falls back to default provider');
 
@@ -1937,7 +1940,7 @@ async function runTests() {
         },
         body: JSON.stringify({
           prompt: 'Hello Gemini',
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3-flash-preview',
         }),
       }),
       geminiEnv
@@ -1946,7 +1949,7 @@ async function runTests() {
     const liveGeminiData = liveGeminiJson.data || liveGeminiJson;
     assert(liveGeminiRes.status === 200, 'POST /api/v1/ai/chat with configured Gemini returns 200');
     assert(liveGeminiData.provider === 'gemini', 'Provider in response is gemini');
-    assert(liveGeminiData.model === 'gemini-2.5-flash', 'Model in response is gemini-2.5-flash');
+    assert(liveGeminiData.model === 'gemini-3-flash-preview', 'Model in response is gemini-3-flash-preview');
     assert(liveGeminiData.response === 'Response from Google Gemini adapter.', 'Received Gemini response text');
   } finally {
     globalThis.fetch = originalFetch;
@@ -2055,7 +2058,7 @@ async function runTests() {
     'user_fresh_test',
     'gemini',
     sampleRawKey,
-    'gemini-2.5-flash',
+    'gemini-3-flash-preview',
     { BYOK_ENCRYPTION_KEY: byokTestSecret } as any
   );
   assert(autoProvisionResult.provider === 'gemini', 'saveUserCredential auto-creates user_ai_credentials table without throwing no such table error');
@@ -2095,7 +2098,7 @@ async function runTests() {
       body: JSON.stringify({
         provider: 'gemini',
         apiKey: sampleRawKey,
-        preferredModel: 'gemini-2.5-flash',
+        preferredModel: 'gemini-3-flash-preview',
       }),
     }),
     aiProdEnv
@@ -2158,8 +2161,8 @@ async function runTests() {
   );
   const aliceModelsJson: any = await aliceModelsRes.json();
   const aliceModelsData = aliceModelsJson.data || aliceModelsJson;
-  const aliceGeminiModel = aliceModelsData.models.find((m: any) => m.id === 'gemini-2.5-flash');
-  assert(aliceGeminiModel && aliceGeminiModel.isConfigured === true, 'gemini-2.5-flash is configured for Alice');
+  const aliceGeminiModel = aliceModelsData.models.find((m: any) => m.id === 'gemini-3-flash-preview');
+  assert(aliceGeminiModel && aliceGeminiModel.isConfigured === true, 'gemini-3-flash-preview is configured for Alice');
 
   const bobModelsRes = await worker.fetch(
     new Request('https://orbit.internal/api/v1/ai/models', {
@@ -2172,16 +2175,18 @@ async function runTests() {
   );
   const bobModelsJson: any = await bobModelsRes.json();
   const bobModelsData = bobModelsJson.data || bobModelsJson;
-  const bobGeminiModel = bobModelsData.models.find((m: any) => m.id === 'gemini-2.5-flash');
-  assert(bobGeminiModel && bobGeminiModel.isConfigured === false, 'gemini-2.5-flash is NOT configured for Bob');
+  const bobGeminiModel = bobModelsData.models.find((m: any) => m.id === 'gemini-3-flash-preview');
+  assert(bobGeminiModel && bobGeminiModel.isConfigured === false, 'gemini-3-flash-preview is NOT configured for Bob');
 
-  // Test 15.6: Chat inference using Alice's decrypted BYOK key
+  // Test 15.6: Chat inference using Alice's decrypted BYOK key via x-goog-api-key header (never URL query param)
   let capturedGeminiApiKey = '';
+  let capturedGeminiUrl = '';
   globalThis.fetch = async (input: any, init?: any): Promise<Response> => {
     const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input?.url || '';
     if (urlStr.includes('generativelanguage.googleapis.com')) {
-      const parsedUrl = new URL(urlStr);
-      capturedGeminiApiKey = parsedUrl.searchParams.get('key') || '';
+      capturedGeminiUrl = urlStr;
+      const hdrs = new Headers(init?.headers || {});
+      capturedGeminiApiKey = hdrs.get('x-goog-api-key') || '';
       return new Response(
         JSON.stringify({
           candidates: [
@@ -2208,7 +2213,7 @@ async function runTests() {
         },
         body: JSON.stringify({
           prompt: 'Hello from Alice with BYOK',
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3-flash-preview',
         }),
       }),
       aiProdEnv
@@ -2218,7 +2223,8 @@ async function runTests() {
     assert(aliceChatRes.status === 200, 'Alice chat with BYOK key returns 200 OK');
     assert(aliceChatData.provider === 'gemini', 'Provider used is gemini');
     assert(aliceChatData.response === 'Response via Alice BYOK Gemini key!', 'Received BYOK response text');
-    assert(capturedGeminiApiKey === sampleRawKey, 'Worker accurately decrypted and supplied Alice BYOK key');
+    assert(capturedGeminiApiKey === sampleRawKey, 'Worker accurately decrypted and supplied Alice BYOK key via x-goog-api-key header');
+    assert(!capturedGeminiUrl.includes(sampleRawKey), 'Gemini URL never exposes API key in query parameters');
 
     // Bob calling without key and with allowFallback: false returns 503
     const bobChatRes = await worker.fetch(
@@ -2230,7 +2236,7 @@ async function runTests() {
         },
         body: JSON.stringify({
           prompt: 'Bob trying Gemini without BYOK',
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3-flash-preview',
           allowFallback: false,
         }),
       }),
@@ -2304,22 +2310,25 @@ async function runTests() {
   const codingModels = OFFICIAL_MODEL_CATALOG.filter((m) => m.category === 'coding');
   const specializedModels = OFFICIAL_MODEL_CATALOG.filter((m) => m.category === 'specialized');
 
-  assert(fastModels.length >= 2, 'Has fast category models (e.g. Orbit Core, GPT-4o mini, Haiku)');
-  assert(balancedModels.length >= 2, 'Has balanced category models (e.g. Gemini 2.5 Flash, GPT-4o)');
-  assert(reasoningModels.length >= 2, 'Has advanced reasoning models (e.g. o3-mini, o1, Gemini 2.5 Pro)');
-  assert(codingModels.length >= 2, 'Has coding & agentic models (e.g. Claude 3.7 Sonnet, Claude 3.5 Sonnet)');
-  assert(specializedModels.length >= 1, 'Has specialized models (e.g. Gemini 3.8 Flash preview)');
+  assert(fastModels.length >= 2, 'Has fast category models (e.g. Orbit Core, Gemini 3.1 Flash-Lite, GPT-4o mini, Haiku)');
+  assert(balancedModels.length >= 2, 'Has balanced category models (e.g. Gemini 3 Flash Preview, GPT-4o)');
+  assert(reasoningModels.length >= 2, 'Has advanced reasoning models (e.g. o3-mini, o1, Gemini 3.1 Pro Preview)');
+  assert(codingModels.length >= 2, 'Has coding & agentic models (e.g. Gemini 3.8 Flash, Claude 3.7 Sonnet, Claude 3.5 Sonnet)');
 
-  // Verify verified context windows
-  const geminiFlash = OFFICIAL_MODEL_CATALOG.find((m) => m.id === 'gemini-2.5-flash');
-  assert(Boolean(geminiFlash && geminiFlash.contextWindow === '1M' && geminiFlash.contextTokens === 1048576), 'Gemini 2.5 Flash has verified 1M context');
-  const geminiPro = OFFICIAL_MODEL_CATALOG.find((m) => m.id === 'gemini-2.5-pro');
-  assert(Boolean(geminiPro && geminiPro.contextWindow === '2M' && geminiPro.contextTokens === 2097152), 'Gemini 2.5 Pro has verified 2M context');
+  // Verify verified context windows & exclusion of restricted Gemini 2.5 models
+  const geminiFlash = OFFICIAL_MODEL_CATALOG.find((m) => m.id === 'gemini-3-flash-preview');
+  assert(Boolean(geminiFlash && geminiFlash.contextWindow === '1M' && geminiFlash.contextTokens === 1048576), 'Gemini 3 Flash Preview has verified 1M context');
+  const geminiPro = OFFICIAL_MODEL_CATALOG.find((m) => m.id === 'gemini-3.1-pro-preview');
+  assert(Boolean(geminiPro && geminiPro.contextWindow === '1M' && geminiPro.contextTokens === 1048576), 'Gemini 3.1 Pro Preview has verified 1M context');
+  const geminiFlashLite = OFFICIAL_MODEL_CATALOG.find((m) => m.id === 'gemini-3.1-flash-lite-preview');
+  assert(Boolean(geminiFlashLite && geminiFlashLite.category === 'fast'), 'Gemini 3.1 Flash-Lite Preview is in fast category');
+  assert(!OFFICIAL_MODEL_CATALOG.some((m) => m.id === 'gemini-2.5-pro' || m.id === 'gemini-2.5-flash' || m.id === 'gemini-2.5-flash-lite'), 'Restricted Gemini 2.5 models are removed from OFFICIAL_MODEL_CATALOG');
   const claude37 = OFFICIAL_MODEL_CATALOG.find((m) => m.id === 'claude-3-7-sonnet');
   assert(Boolean(claude37 && claude37.contextWindow === '200k' && claude37.reasoningCapability === 'hybrid'), 'Claude 3.7 Sonnet has verified 200k context & hybrid reasoning');
 
-  // Verify stable vs preview status distinction
-  assert(Boolean(geminiFlash?.status === 'stable'), 'Gemini 2.5 Flash is flagged stable');
+  // Verify preview status distinction
+  assert(Boolean(geminiFlash?.status === 'preview'), 'Gemini 3 Flash Preview is clearly flagged preview');
+  assert(Boolean(geminiPro?.status === 'preview'), 'Gemini 3.1 Pro Preview is clearly flagged preview');
   const gemini38 = OFFICIAL_MODEL_CATALOG.find((m) => m.id === 'gemini-3.8-flash');
   assert(Boolean(gemini38?.status === 'preview'), 'Gemini 3.8 Flash is clearly distinguished as preview');
 
@@ -2360,6 +2369,7 @@ async function runTests() {
 
   // Test 16.4: Dynamic Model Discovery with Mocked Official Provider APIs
   let interceptedGeminiDiscovery = false;
+  let interceptedGeminiDiscoveryHeader = '';
   let interceptedOpenAiDiscovery = false;
   let interceptedAnthropicDiscovery = false;
 
@@ -2367,10 +2377,12 @@ async function runTests() {
     const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input?.url || '';
     if (urlStr.includes('generativelanguage.googleapis.com/v1beta/models')) {
       interceptedGeminiDiscovery = true;
+      interceptedGeminiDiscoveryHeader = new Headers(init?.headers || {}).get('x-goog-api-key') || '';
       return new Response(
         JSON.stringify({
           models: [
-            { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
+            { name: 'models/gemini-3-flash-preview', supportedGenerationMethods: ['generateContent'] },
+            { name: 'models/gemini-3.1-pro-preview', supportedGenerationMethods: ['generateContent'] },
             { name: 'models/gemini-2.5-pro', supportedGenerationMethods: ['generateContent'] },
             { name: 'models/gemini-embedding-001', supportedGenerationMethods: ['embedContent'] },
           ],
@@ -2409,7 +2421,10 @@ async function runTests() {
   try {
     const geminiModels = await discoverGeminiModels('fake-gemini-key');
     assert(interceptedGeminiDiscovery, 'Invoked official Google Gemini models discovery endpoint');
-    assert(geminiModels.includes('gemini-2.5-flash'), 'Discovered gemini-2.5-flash');
+    assert(interceptedGeminiDiscoveryHeader === 'fake-gemini-key', 'Gemini discovery authenticates via x-goog-api-key header');
+    assert(geminiModels.includes('gemini-3-flash-preview'), 'Discovered gemini-3-flash-preview');
+    assert(geminiModels.includes('gemini-3.1-pro-preview'), 'Discovered gemini-3.1-pro-preview');
+    assert(!geminiModels.includes('gemini-2.5-pro'), 'Filtered out restricted/deprecated gemini-2.5-pro from discovery');
     assert(!geminiModels.includes('gemini-embedding-001'), 'Filtered out non-generateContent models');
 
     const openAiModels = await discoverOpenAiModels('fake-openai-key');
@@ -2472,7 +2487,7 @@ async function runTests() {
       body: JSON.stringify({
         provider: 'gemini',
         apiKey: 'AIzaSyValidGeminiKeyForPersistenceTest_9988',
-        preferredModel: 'gemini-2.5-flash',
+        preferredModel: 'gemini-3-flash-preview',
       }),
     }),
     aiProdEnv
@@ -2480,9 +2495,9 @@ async function runTests() {
   assert(s17ConnectRes.status === 200, 'Alice connects Gemini BYOK provider (200 OK)');
   const s17ConnectData: any = await s17ConnectRes.json();
   assert(s17ConnectData.data.provider === 'gemini', 'Connected provider is gemini');
-  assert(s17ConnectData.data.preferredModel === 'gemini-2.5-flash', 'Preferred model recorded');
+  assert(s17ConnectData.data.preferredModel === 'gemini-3-flash-preview', 'Preferred model recorded');
 
-  // Test 17.2: Send prompt with gemini-2.5-flash and verify real Gemini execution (no silent fallback)
+  // Test 17.2: Send prompt with gemini-3-flash-preview and verify real Gemini execution (no silent fallback)
   let capturedGeminiPayload: any = null;
   const originalFetchBefore17 = globalThis.fetch;
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -2497,7 +2512,7 @@ async function runTests() {
             {
               content: {
                 parts: [
-                  { text: 'Hello Alice! I am Gemini 2.5 Flash operating via your connected BYOK key.' },
+                  { text: 'Hello Alice! I am Gemini 3 Flash Preview operating via your connected BYOK key.' },
                 ],
                 role: 'model',
               },
@@ -2522,25 +2537,27 @@ async function runTests() {
         },
         body: JSON.stringify({
           prompt: 'Hello from Alice test',
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3-flash-preview',
         }),
       }),
       aiProdEnv
     );
-    assert(chatGeminiRes.status === 200, 'Chat with gemini-2.5-flash returns 200 OK');
+    assert(chatGeminiRes.status === 200, 'Chat with gemini-3-flash-preview returns 200 OK');
     const chatGeminiJson: any = await chatGeminiRes.json();
     const chatGeminiData = chatGeminiJson.data || chatGeminiJson;
     assert(chatGeminiData.provider === 'gemini', 'Executed provider is gemini');
-    assert(chatGeminiData.model === 'gemini-2.5-flash', 'Executed model is gemini-2.5-flash');
+    assert(chatGeminiData.model === 'gemini-3-flash-preview', 'Executed model is gemini-3-flash-preview');
     assert(chatGeminiData.fallbackUsed === false, 'fallbackUsed is false (executed real Gemini, no silent fallback)');
-    assert(chatGeminiData.response.includes('Gemini 2.5 Flash operating via your connected BYOK key'), 'Gemini response returned');
+    assert(chatGeminiData.response.includes('Gemini 3 Flash Preview operating via your connected BYOK key'), 'Gemini response returned');
 
-    // Test 17.3: Verify Google Gemini API request format (alternating turns, parts array, systemInstruction)
+    // Test 17.3: Verify Google Gemini API request format & Gemini 3 generationConfig compliance
     assert(capturedGeminiPayload !== null, 'Gemini API received request payload');
     assert(Array.isArray(capturedGeminiPayload.contents), 'contents is an array');
     assert(capturedGeminiPayload.contents[0].role === 'user', 'First turn role is user');
     assert(Array.isArray(capturedGeminiPayload.contents[0].parts), 'Turn parts is an array');
     assert(capturedGeminiPayload.systemInstruction?.parts?.[0]?.text, 'systemInstruction passed with parts');
+    assert(capturedGeminiPayload.generationConfig?.maxOutputTokens >= 8192, 'Gemini 3 generationConfig sets maxOutputTokens >= 8192');
+    assert(capturedGeminiPayload.generationConfig?.temperature === undefined, 'Gemini 3 generationConfig omits custom temperature');
 
     // Test 17.4: Conversation model persistence (Create conversation with modelId)
     const createConvRes = await worker.fetch(
@@ -2552,7 +2569,7 @@ async function runTests() {
         },
         body: JSON.stringify({
           title: 'Alice BYOK Strategy',
-          modelId: 'gemini-2.5-flash',
+          modelId: 'gemini-3-flash-preview',
         }),
       }),
       aiProdEnv
@@ -2560,7 +2577,7 @@ async function runTests() {
     assert(createConvRes.status === 201, 'POST /api/v1/conversations returns 201');
     const createConvData: any = await createConvRes.json();
     const aliceConvId = createConvData.data.id;
-    assert(createConvData.data.modelId === 'gemini-2.5-flash', 'Conversation modelId persisted on creation');
+    assert(createConvData.data.modelId === 'gemini-3-flash-preview', 'Conversation modelId persisted on creation');
 
     // Verify GET /api/v1/conversations returns modelId
     const getConvsRes = await worker.fetch(
@@ -2572,7 +2589,7 @@ async function runTests() {
     const getConvsData: any = await getConvsRes.json();
     const foundAliceConv = getConvsData.data.find((c: any) => c.id === aliceConvId);
     assert(foundAliceConv !== undefined, 'Found created conversation in list');
-    assert(foundAliceConv.modelId === 'gemini-2.5-flash', 'GET /api/v1/conversations returns persisted modelId');
+    assert(foundAliceConv.modelId === 'gemini-3-flash-preview', 'GET /api/v1/conversations returns persisted modelId');
 
     // Test 17.5: Send message to conversation without specifying model in request body
     // Worker must automatically restore modelId from conversation record and execute Gemini!
@@ -2594,7 +2611,7 @@ async function runTests() {
     assert(autoRestoreChatRes.status === 200, 'Chat with omitted model in existing conversation returns 200');
     const autoRestoreChatData = (await autoRestoreChatRes.json() as any).data;
     assert(autoRestoreChatData.provider === 'gemini', 'Automatically restored model routes to gemini provider');
-    assert(autoRestoreChatData.model === 'gemini-2.5-flash', 'Automatically restored model is gemini-2.5-flash');
+    assert(autoRestoreChatData.model === 'gemini-3-flash-preview', 'Automatically restored model is gemini-3-flash-preview');
 
     // Test 17.6: User AI Preferences API (PUT & GET)
     const updatePrefRes = await worker.fetch(
@@ -2605,7 +2622,7 @@ async function runTests() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          defaultModel: 'gemini-2.5-pro',
+          defaultModel: 'gemini-3.1-pro-preview',
         }),
       }),
       aiProdEnv
@@ -2620,7 +2637,7 @@ async function runTests() {
     );
     assert(getPrefRes.status === 200, 'GET /api/v1/ai/preferences returns 200');
     const getPrefData = (await getPrefRes.json() as any).data;
-    assert(getPrefData.defaultModel === 'gemini-2.5-pro', 'Persisted user default model is gemini-2.5-pro');
+    assert(getPrefData.defaultModel === 'gemini-3.1-pro-preview', 'Persisted user default model is gemini-3.1-pro-preview');
 
     // Test 17.7: Update conversation model override via PATCH
     const patchConvRes = await worker.fetch(
@@ -2668,7 +2685,7 @@ async function runTests() {
         },
         body: JSON.stringify({
           prompt: 'Testing invalid key rejection',
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3-flash-preview',
           allowFallback: false,
         }),
       }),
@@ -2679,7 +2696,7 @@ async function runTests() {
     assert(invalidKeyChatJson.error?.code === 'AUTHENTICATION_FAILED', 'Error code is AUTHENTICATION_FAILED');
     assert(invalidKeyChatJson.error?.message?.includes('API key not valid'), 'Error message preserved from provider');
     assert(invalidKeyChatJson.error?.details?.provider === 'gemini', 'Error details specify provider gemini');
-    assert(invalidKeyChatJson.error?.details?.model === 'gemini-2.5-flash', 'Error details specify model gemini-2.5-flash');
+    assert(invalidKeyChatJson.error?.details?.model === 'gemini-3-flash-preview', 'Error details specify model gemini-3-flash-preview');
 
     // Test 17.9: User Isolation Verification (Bob has no credentials and cannot use Alice key)
     const bobProvidersRes = await worker.fetch(
@@ -2701,7 +2718,7 @@ async function runTests() {
         },
         body: JSON.stringify({
           prompt: 'Bob trying to use Gemini without key',
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3-flash-preview',
           allowFallback: false,
         }),
       }),
@@ -2748,7 +2765,7 @@ async function runTests() {
         },
         body: JSON.stringify({
           prompt: 'Alice trying to chat after disconnect',
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3-flash-preview',
           allowFallback: false,
         }),
       }),
@@ -2774,15 +2791,15 @@ async function runTests() {
           Authorization: `Bearer ${s17AliceToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          provider: 'gemini',
-          apiKey: 'AIzaSyAliceSecretKey524TestXYZ999',
-          preferredModel: 'gemini-2.5-flash',
-        }),
+      body: JSON.stringify({
+        provider: 'gemini',
+        apiKey: 'AIzaSyAliceSecretKey524TestXYZ999',
+        preferredModel: 'gemini-3-flash-preview',
       }),
-      aiProdEnv
-    );
-    assert(reconnectRes.status === 200, 'Reconnected Alice Gemini BYOK key for Section 18 tests');
+    }),
+    aiProdEnv
+  );
+  assert(reconnectRes.status === 200, 'Reconnected Alice Gemini BYOK key for Section 18 tests');
 
     // Helper to collect SSE events from a Worker SSE Response
     const readSseEvents = async (res: Response): Promise<Array<Record<string, any>>> => {
@@ -2845,7 +2862,7 @@ async function runTests() {
         },
         body: JSON.stringify({
           prompt: 'Stream a greeting from Gemini',
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3-flash-preview',
           stream: true,
         }),
       }),
@@ -2867,7 +2884,7 @@ async function runTests() {
     assert(Boolean(metaEvt?.conversationId), 'First SSE event emits meta with conversationId');
     assert(deltaEvts.length === 2, 'Received incremental delta events');
     assert(deltaEvts.map((d) => d.text).join('') === 'Hello from Gemini stream!', 'Streamed text matches full Gemini chunks');
-    assert(doneEvt?.provider === 'gemini' && doneEvt?.model === 'gemini-2.5-flash', 'Done SSE event includes provider & model');
+    assert(doneEvt?.provider === 'gemini' && doneEvt?.model === 'gemini-3-flash-preview', 'Done SSE event includes provider & model');
     const s18ConvId = metaEvt!.conversationId as string;
 
     // Test 18.2: Gemini HTTP 524 transient timeout -> recovers on retry with exponential backoff
@@ -2898,7 +2915,7 @@ async function runTests() {
       defaultTimeoutMs: 5000,
     });
     const recovered524Res = await fastRetryGemini.execute({
-      modelId: 'gemini-2.5-flash',
+      modelId: 'gemini-3-flash-preview',
       messages: [{ role: 'user', content: 'Test 524 recovery' }],
     });
     assert(attempts524Recover === 3, 'Gemini retries HTTP 524 up to 2 times and succeeds on 3rd attempt');
@@ -2921,7 +2938,7 @@ async function runTests() {
     let caught524Err: any = null;
     try {
       await fastRetryGemini.execute({
-        modelId: 'gemini-2.5-pro',
+        modelId: 'gemini-3.1-pro-preview',
         messages: [{ role: 'user', content: 'Test persistent 524' }],
       });
     } catch (e) {
@@ -2957,7 +2974,7 @@ async function runTests() {
     };
 
     const recovered429 = await fastRetryGemini.execute({
-      modelId: 'gemini-2.5-flash',
+      modelId: 'gemini-3-flash-preview',
       messages: [{ role: 'user', content: 'Test 429 retry' }],
     });
     assert(attempts429 === 2, 'Gemini retries HTTP 429 with backoff');
@@ -2975,7 +2992,7 @@ async function runTests() {
     let caughtAuthErr: any = null;
     try {
       await fastRetryGemini.execute({
-        modelId: 'gemini-2.5-flash',
+        modelId: 'gemini-3-flash-preview',
         messages: [{ role: 'user', content: 'Bad key' }],
       });
     } catch (e) {
@@ -2984,12 +3001,18 @@ async function runTests() {
     assert(attemptsInvalidKey === 1, 'Invalid API key does NOT retry (exactly 1 attempt)');
     assert(caughtAuthErr?.code === 'AUTHENTICATION_FAILED' && caughtAuthErr?.statusCode === 401, 'Invalid API key maps to AUTHENTICATION_FAILED (401)');
 
-    // Test 18.6: Unsupported model (404) -> NO unnecessary retries (attempts === 1)
+    // Test 18.6: Unsupported / unavailable model (404) -> NO unnecessary retries (attempts === 1)
     let attemptsUnsupported = 0;
     globalThis.fetch = async (): Promise<Response> => {
       attemptsUnsupported++;
       return new Response(
-        JSON.stringify({ error: { code: 404, message: 'models/gemini-nonexistent is not found for API version v1beta', status: 'NOT_FOUND' } }),
+        JSON.stringify({
+          error: {
+            code: 404,
+            message: 'models/gemini-2.5-pro is no longer available to new users.',
+            status: 'NOT_FOUND',
+          },
+        }),
         { status: 404, headers: { 'Content-Type': 'application/json' } }
       );
     };
@@ -3002,8 +3025,9 @@ async function runTests() {
     } catch (e) {
       caughtModelErr = e;
     }
-    assert(attemptsUnsupported === 1, 'Unsupported model (404) does NOT retry (exactly 1 attempt)');
-    assert(caughtModelErr?.code === 'MODEL_NOT_FOUND' && caughtModelErr?.statusCode === 404, 'Unsupported model maps to MODEL_NOT_FOUND (404)');
+    assert(attemptsUnsupported === 1, 'Unsupported/restricted model (404) does NOT retry (exactly 1 attempt)');
+    assert(caughtModelErr?.code === 'MODEL_NOT_FOUND' && caughtModelErr?.statusCode === 404, 'Unsupported/restricted model maps to MODEL_NOT_FOUND (404)');
+    assert(caughtModelErr?.message?.includes('no longer available to new users'), 'Preserves actual upstream unavailability error text');
 
     // Test 18.7: Interrupted streaming response -> preserves partial delta chunks and emits SSE error event
     globalThis.fetch = async (input: RequestInfo | URL): Promise<Response> => {
@@ -3045,7 +3069,7 @@ async function runTests() {
         body: JSON.stringify({
           prompt: 'Trigger mid-stream drop',
           conversationId: s18ConvId,
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3-flash-preview',
           stream: true,
         }),
       }),
@@ -3093,7 +3117,7 @@ async function runTests() {
         body: JSON.stringify({
           prompt: 'Trigger mid-stream drop',
           conversationId: s18ConvId,
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3-flash-preview',
           retry: true,
           stream: true,
         }),
@@ -3134,8 +3158,194 @@ async function runTests() {
     const llamaDone = llamaEvents.find((e) => e.type === 'done');
     assert(llamaDone?.provider === 'cloudflare' && llamaDone?.fallbackUsed === false, 'Switching from Gemini back to Llama executes Cloudflare Workers AI cleanly');
 
-    // Cleanup Alice credential after Section 18
+    // =========================================================================
+    // Section 19: Gemini Model Availability, Migration & Strict No-Fallback
+    // =========================================================================
+    console.log('\n19. Testing Gemini Model Availability, Migration & Strict No-Fallback:');
+
+    // Test 19.1: Frontend & Backend model preference migration preserves valid selections & migrates restricted ones
+    assert(resolveActiveModelSelection('gemini-2.5-pro').modelId === 'gemini-3.1-pro-preview', 'Backend migrates gemini-2.5-pro -> gemini-3.1-pro-preview');
+    assert(resolveActiveModelSelection('gemini-2.5-flash').modelId === 'gemini-3-flash-preview', 'Backend migrates gemini-2.5-flash -> gemini-3-flash-preview');
+    assert(resolveActiveModelSelection('gemini-2.5-flash-lite').modelId === 'gemini-3.1-flash-lite-preview', 'Backend migrates gemini-2.5-flash-lite -> gemini-3.1-flash-lite-preview');
+    assert(resolveActiveModelSelection('gemini-3.1-pro-preview').migratedFrom === undefined, 'Valid gemini-3.1-pro-preview preference is untouched');
+    assert(resolveActiveModelSelection('gpt-4o').migratedFrom === undefined, 'Valid gpt-4o preference is untouched');
+    assert(migrateModelPreference('gemini-2.5-pro').modelId === 'gemini-3.1-pro-preview', 'Frontend migrates gemini-2.5-pro -> gemini-3.1-pro-preview');
+    assert(migrateModelPreference('orbit-agent-v2').migratedFrom === undefined, 'Frontend preserves valid orbit-agent-v2 preference');
+
+    // Test 19.2: Saved unavailable D1 user preferences, provider preferred_model, and conversation model_id safely migrate
+    const s19UserId = `user_s19_migrate_${Date.now()}`;
+    const s19Token = await createFbToken({
+      sub: s19UserId,
+      email: 'migrate@example.com',
+      name: 'Migration User',
+    });
+
+    // Connect via HTTP API first (which safely provisions user row), then simulate legacy D1 rows containing gemini-2.5-pro
+    await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/providers/connect', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${s19Token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          provider: 'gemini',
+          apiKey: 'AIzaSyS19MigrationTestKey_12345',
+          preferredModel: 'gemini-3-flash-preview',
+        }),
+      }),
+      aiProdEnv
+    );
+    await d1
+      .prepare('UPDATE user_ai_credentials SET preferred_model = ? WHERE user_id = ? AND provider = ?')
+      .bind('gemini-2.5-pro', s19UserId, 'gemini')
+      .run();
+    // Ensure default_chat_model column exists, then simulate legacy saved rows containing restricted gemini-2.5-pro
+    await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/preferences', {
+        headers: { Authorization: `Bearer ${s19Token}` },
+      }),
+      aiProdEnv
+    );
+    await d1
+      .prepare('UPDATE users SET default_chat_model = ? WHERE id = ?')
+      .bind('gemini-2.5-pro', s19UserId)
+      .run();
+    const s19ConvId = `conv_s19_${Date.now()}`;
+    await d1
+      .prepare("INSERT INTO conversations (id, user_id, title, model_id, created_at, updated_at) VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))")
+      .bind(s19ConvId, s19UserId, 'Legacy Gemini Conv', 'gemini-2.5-pro')
+      .run();
+
+    const s19PrefRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/preferences', {
+        headers: { Authorization: `Bearer ${s19Token}` },
+      }),
+      aiProdEnv
+    );
+    const s19PrefData = ((await s19PrefRes.json()) as any).data;
+    assert(s19PrefData.defaultModel === 'gemini-3.1-pro-preview', 'GET /api/v1/ai/preferences safely migrates gemini-2.5-pro -> gemini-3.1-pro-preview');
+    assert(s19PrefData.migratedFrom === 'gemini-2.5-pro', 'GET /api/v1/ai/preferences reports migratedFrom');
+
+    const s19ProvRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/providers', {
+        headers: { Authorization: `Bearer ${s19Token}` },
+      }),
+      aiProdEnv
+    );
+    const s19ProvData = ((await s19ProvRes.json()) as any).data;
+    const s19GeminiProv = s19ProvData.providers.find((p: any) => p.id === 'gemini');
+    assert(s19GeminiProv?.preferredModel === 'gemini-3.1-pro-preview', 'GET /api/v1/ai/providers migrates preferredModel to gemini-3.1-pro-preview');
+
+    const s19ConvsRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/conversations', {
+        headers: { Authorization: `Bearer ${s19Token}` },
+      }),
+      aiProdEnv
+    );
+    const s19ConvsData = ((await s19ConvsRes.json()) as any).data;
+    const s19Conv = s19ConvsData.find((c: any) => c.id === s19ConvId);
+    assert(s19Conv?.modelId === 'gemini-3.1-pro-preview', 'GET /api/v1/conversations migrates legacy gemini-2.5-pro -> gemini-3.1-pro-preview');
+
+    // Valid preferences are NOT overwritten
+    await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/preferences', {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${s19Token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ defaultModel: 'gpt-4o' }),
+      }),
+      aiProdEnv
+    );
+    const s19ValidPrefRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/preferences', {
+        headers: { Authorization: `Bearer ${s19Token}` },
+      }),
+      aiProdEnv
+    );
+    const s19ValidPrefData = ((await s19ValidPrefRes.json()) as any).data;
+    assert(s19ValidPrefData.defaultModel === 'gpt-4o' && !s19ValidPrefData.migratedFrom, 'Valid saved preference (gpt-4o) is never overwritten');
+
+    // Test 19.3: Actual message generation across Gemini 3/3.1 models (gemini-3.1-pro-preview, gemini-3-flash-preview, gemini-3.1-flash-lite-preview)
+    const testedGeminiModels: string[] = [];
+    const seenHeaderKeys: string[] = [];
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (urlStr.includes('generativelanguage.googleapis.com')) {
+        const hdrKey = new Headers(init?.headers || {}).get('x-goog-api-key') || '';
+        seenHeaderKeys.push(hdrKey);
+        const mMatch = urlStr.match(/models\/([^:]+):/);
+        const requestedModel = mMatch ? decodeURIComponent(mMatch[1]) : 'unknown';
+        testedGeminiModels.push(requestedModel);
+        return new Response(
+          JSON.stringify({
+            candidates: [{ content: { parts: [{ text: `Verified response from ${requestedModel}` }], role: 'model' }, finishReason: 'STOP' }],
+            usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 6, totalTokenCount: 16 },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return originalFetchBefore18(input, init);
+    };
+
+    for (const modelId of ['gemini-3.1-pro-preview', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview']) {
+      const res = await worker.fetch(
+        new Request('https://orbit.internal/api/v1/ai/chat', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${s19Token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            prompt: `Ping ${modelId}`,
+            model: modelId,
+          }),
+        }),
+        aiProdEnv
+      );
+      const json = (await res.json()) as any;
+      assert(res.status === 200 && json.data?.model === modelId && json.data?.provider === 'gemini', `Executed ${modelId} cleanly via Gemini adapter`);
+    }
+    assert(
+      testedGeminiModels.includes('gemini-3.1-pro-preview') &&
+        testedGeminiModels.includes('gemini-3-flash-preview') &&
+        testedGeminiModels.includes('gemini-3.1-flash-lite-preview'),
+      'Verified actual Gemini execution for gemini-3.1-pro-preview, gemini-3-flash-preview, and gemini-3.1-flash-lite-preview'
+    );
+    assert(seenHeaderKeys.every((k) => k === 'AIzaSyS19MigrationTestKey_12345'), 'All Gemini requests used x-goog-api-key header');
+
+    // Test 19.4: Legacy gemini-2.5-pro chat request auto-migrates to gemini-3.1-pro-preview and NEVER silently falls back to Llama
+    const s19NoKeyUser = `user_s19_nokey_${Date.now()}`;
+    const s19NoKeyToken = await createFbToken({
+      sub: s19NoKeyUser,
+      email: 'nokey@example.com',
+      name: 'NoKey User',
+    });
+    const noFallbackRes = await worker.fetch(
+      new Request('https://orbit.internal/api/v1/ai/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${s19NoKeyToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: 'Attempt Gemini without key and without allowFallback flag',
+          model: 'gemini-2.5-pro',
+          // deliberately omit allowFallback to confirm Gemini NEVER falls back to Llama
+        }),
+      }),
+      aiProdEnv
+    );
+    const noFallbackJson = (await noFallbackRes.json()) as any;
+    assert(noFallbackRes.status === 503, 'Gemini request without key NEVER silently falls back to Llama (returns 503)');
+    assert(noFallbackJson.error?.code === 'PROVIDER_NOT_CONFIGURED', 'Returns PROVIDER_NOT_CONFIGURED instead of Llama');
+    assert(noFallbackJson.error?.details?.model === 'gemini-3.1-pro-preview', 'Migrated target model is reported in error details');
+
+    // Cleanup Alice & s19 credentials after Section 18-19
     await deleteUserCredential(d1, 'fb_usr_alice_101', 'gemini');
+    await deleteUserCredential(d1, s19UserId, 'gemini');
   } finally {
     globalThis.fetch = originalFetchBefore18;
   }

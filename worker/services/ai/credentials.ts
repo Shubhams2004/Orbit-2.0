@@ -1,5 +1,6 @@
 import { Env } from '../../types';
 import { encryptApiKey, decryptApiKey, generateKeyHint } from '../../utils/crypto';
+import { resolveActiveModelSelection } from './catalog';
 
 export interface UserCredentialRecord {
   id: string;
@@ -32,8 +33,13 @@ export const SUPPORTED_BYOK_PROVIDERS: Array<{
   {
     id: 'gemini',
     name: 'Google Gemini',
-    defaultModel: 'gemini-2.5-flash',
-    supportedModels: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite', 'gemini-3.8-flash'],
+    defaultModel: 'gemini-3-flash-preview',
+    supportedModels: [
+      'gemini-3.1-pro-preview',
+      'gemini-3-flash-preview',
+      'gemini-3.1-flash-lite-preview',
+      'gemini-3.8-flash',
+    ],
   },
   {
     id: 'openai',
@@ -118,9 +124,20 @@ export async function getUserCredentials(
       try {
         const decryptedKey = await decryptApiKey(row.encrypted_key, userId, masterSecret);
         if (decryptedKey && decryptedKey.trim().length > 0) {
+          const resolvedPref = row.preferred_model
+            ? resolveActiveModelSelection(row.preferred_model)
+            : undefined;
+          if (resolvedPref?.migratedFrom) {
+            db.prepare(
+              'UPDATE user_ai_credentials SET preferred_model = ?, updated_at = ? WHERE user_id = ? AND provider = ?'
+            )
+              .bind(resolvedPref.modelId, new Date().toISOString(), userId, row.provider)
+              .run()
+              .catch(() => {});
+          }
           result.set(row.provider, {
             apiKey: decryptedKey.trim(),
-            preferredModel: row.preferred_model || undefined,
+            preferredModel: resolvedPref?.modelId || undefined,
             keyHint: row.key_hint,
             updatedAt: row.updated_at,
           });
@@ -168,7 +185,10 @@ export async function saveUserCredential(
   const now = new Date().toISOString();
   const id = `ucred_${userId}_${cleanProvider}`;
 
-  const modelToSave = preferredModel?.trim() || validProvider.defaultModel;
+  const rawPreferred = preferredModel?.trim();
+  const modelToSave = rawPreferred
+    ? resolveActiveModelSelection(rawPreferred).modelId
+    : validProvider.defaultModel;
 
   try {
     await db
@@ -249,9 +269,20 @@ export async function listUserProviders(
       .all<UserCredentialRecord>();
 
     for (const row of rows.results || []) {
+      const resolvedPref = row.preferred_model
+        ? resolveActiveModelSelection(row.preferred_model)
+        : undefined;
+      if (resolvedPref?.migratedFrom) {
+        db.prepare(
+          'UPDATE user_ai_credentials SET preferred_model = ?, updated_at = ? WHERE user_id = ? AND provider = ?'
+        )
+          .bind(resolvedPref.modelId, new Date().toISOString(), userId, row.provider)
+          .run()
+          .catch(() => {});
+      }
       configuredMap.set(row.provider, {
         keyHint: row.key_hint,
-        preferredModel: row.preferred_model || undefined,
+        preferredModel: resolvedPref?.modelId || undefined,
         updatedAt: row.updated_at,
       });
     }

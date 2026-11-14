@@ -66,7 +66,7 @@ export const ChatTerminalView: React.FC = () => {
 
   const modelLifecycle = useMemo(() => {
     return modelProviderService.checkModelLifecycle(selectedModelId);
-  }, [selectedModelId]);
+  }, [selectedModelId, isByokModalOpen]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
